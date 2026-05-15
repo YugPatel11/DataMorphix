@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { UploadCloud, FileText, Database, Info } from 'lucide-react';
+import { UploadCloud, FileText, Database, Info, BarChart2 } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
 const API_BASE = 'http://localhost:8000/api';
+const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'];
 
 function App() {
   const [datasets, setDatasets] = useState([]);
@@ -54,6 +56,23 @@ function App() {
     }
   };
 
+  const getChartData = () => {
+    if (!selectedDataset) return [];
+    return selectedDataset.columns.map(col => ({
+      name: col.name,
+      nulls: col.null_count,
+    }));
+  };
+
+  const getTypeData = () => {
+    if (!selectedDataset) return [];
+    const types = {};
+    selectedDataset.columns.forEach(col => {
+      types[col.data_type] = (types[col.data_type] || 0) + 1;
+    });
+    return Object.keys(types).map(key => ({ name: key, value: types[key] }));
+  };
+
   return (
     <div className="min-h-screen bg-gray-100 p-8">
       <header className="mb-8">
@@ -100,6 +119,35 @@ function App() {
                   <div className="bg-green-50 p-4 rounded text-center">
                     <div className="text-2xl font-bold text-green-700">{selectedDataset.columns?.length || 0}</div>
                     <div className="text-sm text-gray-600">Total Columns</div>
+                  </div>
+                </div>
+
+                <h3 className="font-semibold text-lg mb-4 flex items-center gap-2"><BarChart2 /> Dashboard</h3>
+                <div className="grid grid-cols-2 gap-4 mb-8">
+                  <div className="h-64 border rounded p-2">
+                    <h4 className="text-center text-sm font-semibold mb-2">Missing Values by Column</h4>
+                    <ResponsiveContainer width="100%" height="90%">
+                      <BarChart data={getChartData()}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="name" tick={{fontSize: 10}} interval={0} angle={-45} textAnchor="end" height={60} />
+                        <YAxis />
+                        <Tooltip />
+                        <Bar dataKey="nulls" fill="#ef4444" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div className="h-64 border rounded p-2">
+                    <h4 className="text-center text-sm font-semibold mb-2">Data Type Distribution</h4>
+                    <ResponsiveContainer width="100%" height="90%">
+                      <PieChart>
+                        <Pie data={getTypeData()} cx="50%" cy="50%" outerRadius={60} fill="#8884d8" dataKey="value" label>
+                          {getTypeData().map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip />
+                      </PieChart>
+                    </ResponsiveContainer>
                   </div>
                 </div>
 

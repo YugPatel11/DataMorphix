@@ -22,3 +22,17 @@ class ColumnMetadata(models.Model):
 
     def __str__(self):
         return f"{self.dataset.name} - {self.name}"
+
+class DataLineage(models.Model):
+    dataset = models.ForeignKey(Dataset, related_name='lineage', on_delete=models.CASCADE)
+    source_name = models.CharField(max_length=255)
+    transformation_step = models.CharField(max_length=255)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+class DatasetRelationship(models.Model):
+    source_dataset = models.ForeignKey(Dataset, related_name='outgoing_relations', on_delete=models.CASCADE)
+    target_dataset = models.ForeignKey(Dataset, related_name='incoming_relations', on_delete=models.CASCADE)
+    source_column = models.CharField(max_length=255)
+    target_column = models.CharField(max_length=255)
+    confidence_score = models.FloatField(default=1.0)
+
