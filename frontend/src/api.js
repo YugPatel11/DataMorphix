@@ -42,7 +42,7 @@ export async function queryDataset(id, query) {
 // ── Export ──
 
 export function getExportUrl(id, format) {
-  return `${API_BASE}/datasets/${id}/export/?format=${format}`;
+  return `${API_BASE}/datasets/${id}/export/?type=${format}`;
 }
 
 export async function exportDataset(id, format) {

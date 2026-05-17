@@ -170,7 +170,7 @@ class DatasetViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['get'])
     def export(self, request, pk=None):
         dataset = self.get_object()
-        format_type = request.query_params.get('format', 'json')
+        format_type = request.query_params.get('type', 'json')
 
         cols = dataset.columns.all()
         data = []
