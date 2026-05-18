@@ -10,7 +10,7 @@ load_dotenv()
 api_key = os.environ.get('GEMINI_API_KEY', 'MOCK_KEY_FOR_LOCAL_DEV')
 if api_key != 'MOCK_KEY_FOR_LOCAL_DEV':
     genai.configure(api_key=api_key)
-    model = genai.GenerativeModel('gemini-2.5-flash')
+    model = genai.GenerativeModel('gemini-2.5-pro')
 else:
     model = None
 
