@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { Upload, Search, LayoutDashboard, Database, Layers } from 'lucide-react';
+import { Upload, Search, LayoutDashboard, Database, Layers, Sun, Moon } from 'lucide-react';
 
 export default function Sidebar({
   datasets,
@@ -9,6 +9,8 @@ export default function Sidebar({
   uploading,
   currentPage,
   onNavigate,
+  theme,
+  toggleTheme,
 }) {
   const fileInputRef = useRef(null);
   const [dragOver, setDragOver] = useState(false);
@@ -114,6 +116,31 @@ export default function Sidebar({
             </li>
           )}
         </ul>
+      </div>
+      
+      {/* Theme Toggle */}
+      <div className="sidebar-section" style={{ borderTop: '1px solid var(--border-color)', marginTop: 'auto', padding: '12px 16px' }}>
+        <button
+          onClick={toggleTheme}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: '100%',
+            gap: 8,
+            padding: '10px',
+            background: 'var(--bg-input)',
+            border: '1px solid var(--border-color)',
+            borderRadius: 'var(--radius-md)',
+            color: 'var(--text-primary)',
+            fontSize: '0.82rem',
+            cursor: 'pointer',
+            transition: 'var(--transition)'
+          }}
+        >
+          {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+          {theme === 'dark' ? 'Light Theme' : 'Dark Theme'}
+        </button>
       </div>
     </aside>
   );

@@ -2,13 +2,31 @@ import os
 from dotenv import load_dotenv
 import google.generativeai as genai
 import json
+from pathlib import Path
+
+
+def load_local_env():
+    """Load simple KEY=VALUE pairs from backend/.env without extra dependencies."""
+    env_path = Path(__file__).resolve().parents[1] / '.env'
+    if not env_path.exists():
+        return
+
+    for line in env_path.read_text(encoding='utf-8').splitlines():
+        line = line.strip()
+        if not line or line.startswith('#') or '=' not in line:
+            continue
+        key, value = line.split('=', 1)
+        os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+
+
+load_local_env()
 
 # Load environment variables from .env file
 load_dotenv()
 
 # Initialize Gemini API. The API key should be in environment variables.
-api_key = os.environ.get('GEMINI_API_KEY', 'MOCK_KEY_FOR_LOCAL_DEV')
-if api_key != 'MOCK_KEY_FOR_LOCAL_DEV':
+api_key = os.getenv('GEMINI_API_KEY') or os.getenv('GOOGLE_API_KEY')
+if api_key and api_key != 'MOCK_KEY_FOR_LOCAL_DEV':
     genai.configure(api_key=api_key)
     model = genai.GenerativeModel('gemini-2.5-pro')
 else:
@@ -54,21 +72,54 @@ def generate_dataset_summary(dataset_name, columns_info):
 
 
 def analyze_query(dataset_name, columns_info, user_query):
-    """Uses LLM to answer user queries about the dataset."""
+    """Uses LLM to analyze query and produce answer with optional chart planning."""
     if not model:
-        return f"Real AI answer for '{user_query}' (Requires GEMINI_API_KEY)"
+        return {
+            "answer": f"Mock AI answer for '{user_query}'",
+            "pandas_code": None,
+            "chart_type": None
+        }
 
     prompt = f"""
-    Dataset: {dataset_name}
-    Dictionary: {json.dumps(columns_info)}
-    User Question: {user_query}
-    Provide a helpful, precise answer based ONLY on the provided dictionary.
+    You are an advanced AI Data Analyst for DataMorphix.
+    Analyze the user's query against the dataset '{dataset_name}'.
+    
+    COLUMNS SCHEMA:
+    {json.dumps(columns_info, indent=2)}
+
+    USER QUERY:
+    "{user_query}"
+
+    Your task is to:
+    1. Formulate a direct business answer to the user's question.
+    2. If the user is asking for a trend, comparison, breakdown, distribution, or specifically requests a graph/chart, write a single Python pandas expression that extracts the relevant data from a pandas DataFrame named 'df'.
+       - The pandas expression MUST evaluate to a Pandas Series, DataFrame, or dictionary containing label-value pairs.
+       - Example for "sales by city": df.groupby('City')['Sales'].sum().head(10).to_dict()
+       - Example for "distribution of categories": df['Category'].value_counts().head(10).to_dict()
+       - Example for "Null counts in columns": df.isnull().sum().to_dict()
+       - Make sure you use the exact column names from the columns schema above. Case sensitivity matters!
+       - The expression must NOT modify the dataframe (no in-place edits).
+    
+    Return ONLY a valid JSON object with the following keys. No markdown, no triple backticks, no other text.
+    {{
+      "answer": "A clear, professional, direct explanation of the insight.",
+      "pandas_code": "The pandas python expression as a string (or null if no data extraction is needed)",
+      "chart_type": "bar" | "line" | "pie" | "area" | null,
+      "x_label": "Label for the independent variable / category axis (string or null)",
+      "y_label": "Label for the dependent variable / value axis (string or null)"
+    }}
     """
     try:
         response = model.generate_content(prompt)
-        return response.text.strip()
+        text = response.text.replace('```json', '').replace('```', '').strip()
+        return json.loads(text)
     except Exception as e:
-        return f"AI Error: {str(e)}"
+        print(f"Query AI Error: {e}")
+        return {
+            "answer": f"Sorry, I encountered an issue analyzing your query. Error: {str(e)}",
+            "pandas_code": None,
+            "chart_type": None
+        }
 
 
 def suggest_rename(column_name):

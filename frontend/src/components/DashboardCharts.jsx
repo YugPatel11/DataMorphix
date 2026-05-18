@@ -8,16 +8,17 @@ const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
   return (
     <div style={{
-      background: '#1e293b',
-      border: '1px solid #334155',
+      background: 'var(--bg-secondary)',
+      border: '1px solid var(--border-color)',
       borderRadius: 8,
       padding: '8px 12px',
       fontSize: '0.78rem',
-      color: '#f1f5f9',
+      color: 'var(--text-primary)',
+      boxShadow: 'var(--shadow-card)',
     }}>
-      <div style={{ marginBottom: 2, fontWeight: 600 }}>{label}</div>
+      <div style={{ marginBottom: 4, fontWeight: 600 }}>{label}</div>
       {payload.map((p, i) => (
-        <div key={i} style={{ color: p.color }}>
+        <div key={i} style={{ color: p.color, fontSize: '0.74rem', marginTop: 2 }}>
           {p.name}: {p.value}
         </div>
       ))}
@@ -97,9 +98,9 @@ export default function DashboardCharts({ dataset }) {
           {nullData.length > 0 ? (
             <ResponsiveContainer width="100%" height={260}>
               <BarChart data={nullData} margin={{ top: 5, right: 10, left: 0, bottom: 40 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#64748b' }} interval={0} angle={-45} textAnchor="end" height={60} />
-                <YAxis tick={{ fontSize: 10, fill: '#64748b' }} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" />
+                <XAxis dataKey="name" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} interval={0} angle={-45} textAnchor="end" height={60} />
+                <YAxis tick={{ fontSize: 10, fill: 'var(--text-muted)' }} />
                 <Tooltip content={<CustomTooltip />} />
                 <Bar dataKey="nulls" fill="#ef4444" radius={[4, 4, 0, 0]} />
               </BarChart>
@@ -126,7 +127,7 @@ export default function DashboardCharts({ dataset }) {
                   dataKey="value"
                   paddingAngle={3}
                   label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
-                  labelLine={{ stroke: '#475569' }}
+                  labelLine={{ stroke: 'var(--text-muted)' }}
                 >
                   {typeData.map((_, index) => (
                     <Cell key={index} fill={CHART_COLORS[index % CHART_COLORS.length]} />

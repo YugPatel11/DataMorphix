@@ -1,6 +1,128 @@
 import React, { useState } from 'react';
-import { Send, Bot, User, Sparkles } from 'lucide-react';
+import { Send, Bot, User, Sparkles, BarChart2 } from 'lucide-react';
+import { 
+  BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, 
+  PieChart, Pie, Cell, Legend, LineChart, Line, AreaChart, Area 
+} from 'recharts';
 import { queryDataset } from '../api';
+
+const COLORS = ['#6366f1', '#3b82f6', '#06b6d4', '#22c55e', '#f59e0b', '#ef4444', '#a855f7', '#ec4899'];
+
+const CustomTooltip = ({ active, payload, label }) => {
+  if (!active || !payload?.length) return null;
+  return (
+    <div style={{
+      background: 'var(--bg-secondary)',
+      border: '1px solid var(--border-color)',
+      borderRadius: 8,
+      padding: '8px 12px',
+      fontSize: '0.78rem',
+      color: 'var(--text-primary)',
+      boxShadow: 'var(--shadow-card)',
+    }}>
+      <div style={{ marginBottom: 4, fontWeight: 600 }}>{label}</div>
+      {payload.map((p, i) => (
+        <div key={i} style={{ color: p.color || '#6366f1', fontSize: '0.74rem', marginTop: 2 }}>
+          {p.name}: {typeof p.value === 'number' ? p.value.toLocaleString() : p.value}
+        </div>
+      ))}
+    </div>
+  );
+};
+
+function DynamicChart({ type, data, xLabel, yLabel }) {
+  if (!data || data.length === 0) return null;
+
+  const renderChart = () => {
+    switch (type) {
+      case 'bar':
+        return (
+          <BarChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" vertical={false} />
+            <XAxis dataKey="name" stroke="var(--text-muted)" fontSize={10} tickLine={false} />
+            <YAxis stroke="var(--text-muted)" fontSize={10} tickLine={false} />
+            <Tooltip content={<CustomTooltip />} />
+            <Bar dataKey="value" fill="#6366f1" radius={[4, 4, 0, 0]}>
+              {data.map((entry, index) => (
+                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+              ))}
+            </Bar>
+          </BarChart>
+        );
+      case 'line':
+        return (
+          <LineChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" vertical={false} />
+            <XAxis dataKey="name" stroke="var(--text-muted)" fontSize={10} tickLine={false} />
+            <YAxis stroke="var(--text-muted)" fontSize={10} tickLine={false} />
+            <Tooltip content={<CustomTooltip />} />
+            <Line type="monotone" dataKey="value" stroke="#6366f1" strokeWidth={2} dot={{ fill: '#6366f1', r: 4 }} />
+          </LineChart>
+        );
+      case 'area':
+        return (
+          <AreaChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+            <defs>
+              <linearGradient id="areaColor" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#6366f1" stopOpacity={0.4}/>
+                <stop offset="95%" stopColor="#6366f1" stopOpacity={0.0}/>
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" vertical={false} />
+            <XAxis dataKey="name" stroke="var(--text-muted)" fontSize={10} tickLine={false} />
+            <YAxis stroke="var(--text-muted)" fontSize={10} tickLine={false} />
+            <Tooltip content={<CustomTooltip />} />
+            <Area type="monotone" dataKey="value" stroke="#6366f1" strokeWidth={2} fillOpacity={1} fill="url(#areaColor)" />
+          </AreaChart>
+        );
+      case 'pie':
+        return (
+          <PieChart>
+            <Pie
+              data={data}
+              cx="50%"
+              cy="50%"
+              innerRadius={45}
+              outerRadius={70}
+              paddingAngle={4}
+              dataKey="value"
+            >
+              {data.map((entry, index) => (
+                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+              ))}
+            </Pie>
+            <Tooltip content={<CustomTooltip />} />
+            <Legend verticalAlign="bottom" height={36} iconSize={8} iconType="circle" wrapperStyle={{ fontSize: '0.7rem' }} />
+          </PieChart>
+        );
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div style={{ 
+      marginTop: 16, 
+      padding: '16px 20px', 
+      background: 'var(--bg-inset)', 
+      border: '1px solid var(--border-color)', 
+      borderRadius: 12,
+      maxWidth: '100%',
+      animation: 'fadeSlideIn 0.4s ease-out'
+    }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12, alignItems: 'center' }}>
+        <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+          <BarChart2 size={13} color="var(--accent-indigo)" /> {yLabel || 'Value'} by {xLabel || 'Category'} ({type} chart)
+        </span>
+      </div>
+      <div style={{ width: '100%', height: 220 }}>
+        <ResponsiveContainer width="100%" height="100%">
+          {renderChart()}
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
 
 export default function QueryPanel({ dataset }) {
   const [query, setQuery] = useState('');
@@ -17,8 +139,17 @@ export default function QueryPanel({ dataset }) {
     setLoading(true);
 
     try {
-      const answer = await queryDataset(dataset.id, userQuery);
-      setHistory((prev) => [...prev, { role: 'ai', text: answer }]);
+      const result = await queryDataset(dataset.id, userQuery);
+      setHistory((prev) => [...prev, { 
+        role: 'ai', 
+        text: result.answer,
+        chart: result.chart_type ? {
+          type: result.chart_type,
+          data: result.chart_data,
+          xLabel: result.x_label,
+          yLabel: result.y_label
+        } : null
+      }]);
     } catch (err) {
       setHistory((prev) => [...prev, { role: 'ai', text: 'Sorry, something went wrong. Please try again.' }]);
     } finally {
@@ -27,10 +158,10 @@ export default function QueryPanel({ dataset }) {
   };
 
   const suggestions = [
-    'What does this dataset contain?',
-    'Show all date columns',
+    'Show a bar chart of customers count by city',
     'Which columns have missing values?',
-    'What are the key identifiers?',
+    'What does this dataset contain?',
+    'Show a pie chart of null values remaining in columns',
   ];
 
   return (
@@ -69,7 +200,7 @@ export default function QueryPanel({ dataset }) {
 
       {/* Conversation History */}
       {history.length > 0 && (
-        <div style={{ maxHeight: 400, overflowY: 'auto', marginBottom: 20, display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={{ maxHeight: 480, overflowY: 'auto', marginBottom: 20, display: 'flex', flexDirection: 'column', gap: 12 }}>
           {history.map((msg, i) => (
             <div
               key={i}
@@ -110,6 +241,14 @@ export default function QueryPanel({ dataset }) {
                 }}>
                   {msg.text}
                 </div>
+                {msg.chart && (
+                  <DynamicChart 
+                    type={msg.chart.type}
+                    data={msg.chart.data}
+                    xLabel={msg.chart.xLabel}
+                    yLabel={msg.chart.yLabel}
+                  />
+                )}
               </div>
             </div>
           ))}
@@ -131,7 +270,7 @@ export default function QueryPanel({ dataset }) {
         <input
           type="text"
           className="query-input"
-          placeholder="Ask anything about your data… e.g. 'What does customer_id mean?'"
+          placeholder="Ask anything about your data or ask to draw a graph… e.g. 'Show bar chart of count by city'"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           disabled={loading}

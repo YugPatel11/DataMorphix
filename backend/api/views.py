@@ -38,10 +38,28 @@ class DatasetViewSet(viewsets.ModelViewSet):
             data_type = str(df[col].dtype)
             sample_vals = df[col].dropna().astype(str).unique()[:3].tolist()
 
+            advanced_stats = {}
+            if pd.api.types.is_numeric_dtype(df[col]):
+                col_data = df[col].dropna()
+                if len(col_data) > 0:
+                    advanced_stats = {
+                        "min": float(col_data.min()),
+                        "max": float(col_data.max()),
+                        "mean": float(col_data.mean()),
+                        "median": float(col_data.median()),
+                        "std": float(col_data.std()) if len(col_data) > 1 else 0.0
+                    }
+            else:
+                top_values = df[col].value_counts().head(10).to_dict()
+                advanced_stats = {
+                    "top_values": {str(k): int(v) for k, v in top_values.items()}
+                }
+
             cols_info.append({
                 "name": col, "type": data_type,
                 "nulls": null_count, "uniques": unique_count,
-                "samples": sample_vals
+                "samples": sample_vals,
+                "advanced_stats": advanced_stats
             })
 
         # ── Step 2: AI column descriptions (one batched API call) ──
@@ -66,7 +84,8 @@ class DatasetViewSet(viewsets.ModelViewSet):
                 null_count=info['nulls'],
                 unique_count=info['uniques'],
                 sample_values=info['samples'],
-                suggested_name=suggested
+                suggested_name=suggested,
+                advanced_stats=info['advanced_stats']
             )
             info['desc'] = ai_desc
 
@@ -158,13 +177,64 @@ class DatasetViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def query(self, request, pk=None):
         dataset = self.get_object()
-        query = request.data.get('query', '')
+        query_text = request.data.get('query', '')
 
         columns = dataset.columns.all()
-        cols_info = [{"name": c.name, "type": c.data_type, "description": c.ai_description} for c in columns]
+        cols_info = [{
+            "name": c.name,
+            "type": c.data_type,
+            "description": c.ai_description,
+            "sample_values": c.sample_values
+        } for c in columns]
 
-        response_text = ai_engine.analyze_query(dataset.name, cols_info, query)
-        return Response({'answer': response_text})
+        ai_plan = ai_engine.analyze_query(dataset.name, cols_info, query_text)
+        
+        answer = ai_plan.get('answer', 'AI answer not available.')
+        chart_type = ai_plan.get('chart_type')
+        pandas_code = ai_plan.get('pandas_code')
+        x_label = ai_plan.get('x_label', 'Category')
+        y_label = ai_plan.get('y_label', 'Value')
+
+        chart_data = None
+
+        if pandas_code:
+            try:
+                df = self._read_dataframe(dataset.file.path, dataset.name)
+                if df is not None:
+                    import pandas as pd
+                    # Safe execution
+                    allowed_globals = {"df": df, "pd": pd}
+                    res = eval(pandas_code, allowed_globals)
+                    
+                    if hasattr(res, 'to_dict'):
+                        res_dict = res.to_dict()
+                    elif isinstance(res, dict):
+                        res_dict = res
+                    else:
+                        res_dict = {}
+
+                    if isinstance(res_dict, dict):
+                        chart_data = []
+                        for k, v in res_dict.items():
+                            try:
+                                val = float(v)
+                            except (ValueError, TypeError):
+                                val = v
+                            chart_data.append({
+                                "name": str(k),
+                                "value": val
+                            })
+            except Exception as e:
+                print(f"Error executing pandas query code: {e}")
+                chart_type = None
+
+        return Response({
+            'answer': answer,
+            'chart_type': chart_type,
+            'chart_data': chart_data,
+            'x_label': x_label,
+            'y_label': y_label
+        })
 
     # ── Export (JSON / CSV / PDF / Excel) ──
     @action(detail=True, methods=['get'])
@@ -315,6 +385,16 @@ class DatasetViewSet(viewsets.ModelViewSet):
 
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def destroy(self, request, *args, **kwargs):
+        import os
+        dataset = self.get_object()
+        try:
+            if dataset.file and os.path.exists(dataset.file.path):
+                os.remove(dataset.file.path)
+        except Exception as e:
+            print(f"Error deleting file: {e}")
+        return super().destroy(request, *args, **kwargs)
 
 
 # ── Global Search (not part of the ViewSet) ──

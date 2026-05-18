@@ -36,7 +36,7 @@ export async function deleteDataset(id) {
 
 export async function queryDataset(id, query) {
   const res = await api.post(`/datasets/${id}/query/`, { query });
-  return res.data.answer;
+  return res.data;
 }
 
 // ── Export ──
@@ -45,14 +45,9 @@ export function getExportUrl(id, format) {
   return `${API_BASE}/datasets/${id}/export/?type=${format}`;
 }
 
-export async function exportDataset(id, format) {
+export function exportDataset(id, format) {
   const url = getExportUrl(id, format);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = '';
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+  window.open(url, '_blank');
 }
 
 // ── Governance ──

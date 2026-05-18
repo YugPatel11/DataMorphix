@@ -2,9 +2,9 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, BookOpen, MessageSquare, GitBranch,
-  Link2, ShieldAlert, BarChart3, Wand2, Download, Search, RefreshCw
+  Link2, ShieldAlert, BarChart3, Wand2, Download, Search, RefreshCw, Trash2
 } from 'lucide-react';
-import { fetchDatasets, uploadDataset, fetchDataset, reprocessDataset } from './api';
+import { fetchDatasets, uploadDataset, fetchDataset, reprocessDataset, deleteDataset } from './api';
 
 // Components
 import Sidebar from './components/Sidebar';
@@ -31,7 +31,7 @@ const TABS = [
   { key: 'export', label: 'Export', icon: <Download size={14} /> },
 ];
 
-function DatasetDetail({ dataset, onReprocess, reprocessing }) {
+function DatasetDetail({ dataset, onReprocess, reprocessing, onDelete }) {
   const [activeTab, setActiveTab] = useState('dashboard');
 
   // Reset tab when dataset changes
@@ -64,27 +64,52 @@ function DatasetDetail({ dataset, onReprocess, reprocessing }) {
             {dataset.row_count?.toLocaleString() || '—'} rows · {dataset.columns?.length || 0} columns · Score: {dataset.health_score ?? '—'}/100
           </div>
         </div>
-        <button
-          onClick={onReprocess}
-          disabled={reprocessing}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-            padding: '7px 14px',
-            borderRadius: 'var(--radius-md)',
-            border: '1px solid var(--border-color)',
-            background: 'var(--bg-card)',
-            color: 'var(--text-secondary)',
-            fontSize: '0.78rem',
-            cursor: 'pointer',
-            transition: 'var(--transition)',
-            fontFamily: 'var(--font-main)',
-          }}
-        >
-          <RefreshCw size={13} className={reprocessing ? 'spinning' : ''} style={reprocessing ? { animation: 'spin 1s linear infinite' } : {}} />
-          {reprocessing ? 'Reprocessing…' : 'Reprocess'}
-        </button>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button
+            onClick={onReprocess}
+            disabled={reprocessing}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '7px 14px',
+              borderRadius: 'var(--radius-md)',
+              border: '1px solid var(--border-color)',
+              background: 'var(--bg-card)',
+              color: 'var(--text-secondary)',
+              fontSize: '0.78rem',
+              cursor: 'pointer',
+              transition: 'var(--transition)',
+              fontFamily: 'var(--font-main)',
+            }}
+          >
+            <RefreshCw size={13} className={reprocessing ? 'spinning' : ''} style={reprocessing ? { animation: 'spin 1s linear infinite' } : {}} />
+            {reprocessing ? 'Reprocessing…' : 'Reprocess'}
+          </button>
+          
+          <button
+            onClick={onDelete}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '7px 14px',
+              borderRadius: 'var(--radius-md)',
+              border: '1px solid rgba(255, 59, 48, 0.2)',
+              background: 'rgba(255, 59, 48, 0.05)',
+              color: 'var(--accent-red)',
+              fontSize: '0.78rem',
+              cursor: 'pointer',
+              transition: 'var(--transition)',
+              fontFamily: 'var(--font-main)',
+            }}
+            onMouseOver={(e) => { e.currentTarget.style.background = 'rgba(255, 59, 48, 0.1)'; }}
+            onMouseOut={(e) => { e.currentTarget.style.background = 'rgba(255, 59, 48, 0.05)'; }}
+          >
+            <Trash2 size={13} />
+            Delete Dataset
+          </button>
+        </div>
       </div>
 
       {/* Tabs */}
@@ -142,8 +167,18 @@ export default function App() {
   const [uploading, setUploading] = useState(false);
   const [reprocessing, setReprocessing] = useState(false);
   const [currentPage, setCurrentPage] = useState('dashboard');
+  const [theme, setTheme] = useState(localStorage.getItem('theme') || 'light');
   const navigate = useNavigate();
   const location = useLocation();
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('theme', theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme((prev) => (prev === 'light' ? 'dark' : 'light'));
+  };
 
   // Sync page from URL
   useEffect(() => {
@@ -214,6 +249,22 @@ export default function App() {
     }
   };
 
+  // Delete
+  const handleDeleteDataset = async () => {
+    if (!selectedDataset) return;
+    if (!window.confirm(`Are you sure you want to delete the dataset "${selectedDataset.name}"? This will permanently remove all of its AI-generated metadata, relationships, lineage, and governance reports. This action cannot be undone.`)) {
+      return;
+    }
+    try {
+      await deleteDataset(selectedDataset.id);
+      setSelectedDataset(null);
+      await loadDatasets();
+    } catch (err) {
+      console.error('Delete failed:', err);
+      alert('Failed to delete dataset. Please try again.');
+    }
+  };
+
   // Navigate
   const handleNavigate = (page) => {
     setCurrentPage(page);
@@ -234,6 +285,8 @@ export default function App() {
         uploading={uploading}
         currentPage={currentPage}
         onNavigate={handleNavigate}
+        theme={theme}
+        toggleTheme={toggleTheme}
       />
 
       <main className="main-content">
@@ -265,6 +318,7 @@ export default function App() {
                   dataset={selectedDataset}
                   onReprocess={handleReprocess}
                   reprocessing={reprocessing}
+                  onDelete={handleDeleteDataset}
                 />
               ) : (
                 <WelcomeScreen />

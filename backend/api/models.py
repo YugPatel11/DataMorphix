@@ -23,6 +23,7 @@ class ColumnMetadata(models.Model):
     unique_count = models.IntegerField(default=0)
     sample_values = models.JSONField(default=list)
     suggested_name = models.CharField(max_length=255, null=True, blank=True)
+    advanced_stats = models.JSONField(default=dict, blank=True)
 
     def __str__(self):
         return f"{self.dataset.name} - {self.name}"
