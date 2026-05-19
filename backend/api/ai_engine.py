@@ -1,5 +1,4 @@
 import os
-from dotenv import load_dotenv
 import google.generativeai as genai
 import json
 from pathlib import Path
@@ -20,9 +19,6 @@ def load_local_env():
 
 
 load_local_env()
-
-# Load environment variables from .env file
-load_dotenv()
 
 # Initialize Gemini API. The API key should be in environment variables.
 api_key = os.getenv('GEMINI_API_KEY') or os.getenv('GOOGLE_API_KEY')

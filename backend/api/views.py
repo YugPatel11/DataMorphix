@@ -18,11 +18,17 @@ class DatasetViewSet(viewsets.ModelViewSet):
 
     def _read_dataframe(self, file_path, file_name):
         """Read a file into a pandas DataFrame based on extension."""
-        if file_name.endswith('.csv'):
-            return pd.read_csv(file_path)
-        elif file_name.endswith('.xlsx'):
+        extension = file_name.lower().rsplit('.', 1)[-1] if '.' in file_name else ''
+        if extension == 'csv':
+            try:
+                return pd.read_csv(file_path)
+            except UnicodeDecodeError:
+                return pd.read_csv(file_path, encoding='latin1')
+        elif extension in {'xlsx', 'xlsm'}:
+            return pd.read_excel(file_path, engine='openpyxl')
+        elif extension == 'xls':
             return pd.read_excel(file_path)
-        elif file_name.endswith('.json'):
+        elif extension == 'json':
             return pd.read_json(file_path)
         return None
 

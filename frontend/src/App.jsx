@@ -216,7 +216,8 @@ export default function App() {
       navigate('/');
     } catch (err) {
       console.error('Upload failed:', err);
-      alert('Upload failed. Make sure the file is a valid CSV, Excel, or JSON.');
+      const message = err.response?.data?.error || err.message || 'Unknown error';
+      alert(`Upload failed: ${message}`);
     } finally {
       setUploading(false);
     }
