@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { Upload, Search, LayoutDashboard, Database, Layers, Sun, Moon } from 'lucide-react';
+import { Upload, Search, LayoutDashboard, Database, Layers, Sun, Moon, Zap, User } from 'lucide-react';
 
 export default function Sidebar({
   datasets,
@@ -32,15 +32,17 @@ export default function Sidebar({
       {/* Brand */}
       <div className="sidebar-brand">
         <h1>
-          <Database style={{ display: 'inline', width: 20, height: 20, verticalAlign: 'middle', marginRight: 6 }} />
-          DataMorphix
+          <div className="brand-icon-wrap">
+            <Zap size={18} color="#18181b" />
+          </div>
+          DM_CORE
         </h1>
         <p>AI Data Dictionary</p>
       </div>
 
-      {/* Upload */}
+      {/* Upload Zone */}
       <div className="sidebar-section">
-        <div className="sidebar-section-title">Upload Dataset</div>
+        <div className="sidebar-section-title">New Source</div>
         <div
           className={`upload-zone ${dragOver ? 'drag-over' : ''}`}
           onClick={() => fileInputRef.current?.click()}
@@ -54,10 +56,11 @@ export default function Sidebar({
             accept=".csv,.xlsx,.json"
             onChange={handleFileSelect}
           />
-          <div className="upload-icon"><Upload size={24} /></div>
-          <div className="upload-text">
-            <strong>Click to Upload</strong> or drag & drop<br />
-            CSV, Excel, JSON
+          <Upload size={24} className="upload-icon mx-auto" />
+          <div className="upload-text mt-2">
+            <strong>Drop File Here</strong><br />
+            or click to browse<br />
+            <span style={{ fontSize: '0.65rem', opacity: 0.7 }}>CSV, Excel, JSON (Max 50MB)</span>
           </div>
         </div>
         {uploading && (
@@ -70,19 +73,19 @@ export default function Sidebar({
 
       {/* Navigation */}
       <div className="sidebar-section">
-        <div className="sidebar-section-title">Navigation</div>
+        <div className="sidebar-section-title">Explore</div>
         <ul className="nav-links">
           <li
             className={`nav-link ${currentPage === 'dashboard' ? 'active' : ''}`}
             onClick={() => onNavigate('dashboard')}
           >
-            <LayoutDashboard size={16} /> Dashboard
+            <LayoutDashboard size={16} /> Overview
           </li>
           <li
             className={`nav-link ${currentPage === 'search' ? 'active' : ''}`}
             onClick={() => onNavigate('search')}
           >
-            <Search size={16} /> Search Datasets
+            <Search size={16} /> Search Network
           </li>
         </ul>
       </div>
@@ -90,7 +93,7 @@ export default function Sidebar({
       {/* Dataset List */}
       <div className="sidebar-section" style={{ flex: 1, overflowY: 'auto' }}>
         <div className="sidebar-section-title">
-          Your Datasets ({datasets.length})
+          Data Sources ({datasets.length})
         </div>
         <ul className="dataset-list">
           {datasets.map((ds) => (
@@ -100,47 +103,40 @@ export default function Sidebar({
               onClick={() => onSelectDataset(ds)}
             >
               <div className="ds-name">
-                <Layers size={13} style={{ verticalAlign: 'middle', marginRight: 5, opacity: 0.5 }} />
+                <Database size={12} style={{ verticalAlign: 'middle', marginRight: 6, opacity: 0.6 }} />
                 {ds.name}
               </div>
               <div className="ds-meta">
                 <span className={`status-dot ${ds.status}`}></span>
-                {ds.status}
-                <span style={{ marginLeft: 'auto' }}>{ds.health_score != null ? `${ds.health_score}/100` : '—'}</span>
+                <span style={{ textTransform: 'capitalize' }}>{ds.status}</span>
+                <span style={{ marginLeft: 'auto' }}>
+                  {ds.health_score != null ? `${ds.health_score}%` : '—'}
+                </span>
               </div>
             </li>
           ))}
           {datasets.length === 0 && (
-            <li style={{ padding: '16px 12px', color: 'var(--text-dim)', fontSize: '0.78rem', textAlign: 'center' }}>
-              No datasets yet.<br />Upload one to get started.
+            <li style={{ padding: '20px 12px', color: 'var(--text-dim)', fontSize: '0.75rem', textAlign: 'center', lineHeight: 1.6 }}>
+              No sources connected.<br />Upload a file above.
             </li>
           )}
         </ul>
       </div>
       
-      {/* Theme Toggle */}
-      <div className="sidebar-section" style={{ borderTop: '1px solid var(--border-color)', marginTop: 'auto', padding: '12px 16px' }}>
-        <button
-          onClick={toggleTheme}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: '100%',
-            gap: 8,
-            padding: '10px',
-            background: 'var(--bg-input)',
-            border: '1px solid var(--border-color)',
-            borderRadius: 'var(--radius-md)',
-            color: 'var(--text-primary)',
-            fontSize: '0.82rem',
-            cursor: 'pointer',
-            transition: 'var(--transition)'
-          }}
-        >
-          {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
-          {theme === 'dark' ? 'Light Theme' : 'Dark Theme'}
-        </button>
+      {/* Profile / Theme */}
+      <div className="sidebar-section" style={{ borderTop: '1px solid var(--border-color)', marginTop: 'auto', padding: '16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+          <div style={{ width: 36, height: 36, borderRadius: 'var(--radius-md)', background: 'var(--bg-input)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <User size={18} color="var(--text-muted)" />
+          </div>
+          <div>
+            <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-primary)' }}>Admin User</div>
+            <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 600 }}>Workspace Owner</div>
+          </div>
+        </div>
+        {/* We moved the theme toggle to the top right, but if we want to keep it here, it could be a small button.
+            Given the design, we can either remove it or keep a minimal version.
+            We will remove it from here since we added it to the top App header. */}
       </div>
     </aside>
   );

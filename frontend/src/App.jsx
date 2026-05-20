@@ -2,7 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, BookOpen, MessageSquare, GitBranch,
-  Link2, ShieldAlert, BarChart3, Wand2, Download, Search, RefreshCw, Trash2
+  Link2, ShieldAlert, BarChart3, Wand2, Download, Search, RefreshCw, Trash2,
+  Activity, Sun, Moon, Bell, Settings
 } from 'lucide-react';
 import { fetchDatasets, uploadDataset, fetchDataset, reprocessDataset, deleteDataset } from './api';
 
@@ -24,14 +25,14 @@ const TABS = [
   { key: 'dictionary', label: 'Dictionary', icon: <BookOpen size={14} /> },
   { key: 'query', label: 'AI Query', icon: <MessageSquare size={14} /> },
   { key: 'lineage', label: 'Lineage', icon: <GitBranch size={14} /> },
-  { key: 'relationships', label: 'Relationships', icon: <Link2 size={14} /> },
+  { key: 'relationships', label: 'Relations', icon: <Link2 size={14} /> },
   { key: 'governance', label: 'Governance', icon: <ShieldAlert size={14} /> },
-  { key: 'usage', label: 'Usage Insights', icon: <BarChart3 size={14} /> },
+  { key: 'usage', label: 'Usage', icon: <BarChart3 size={14} /> },
   { key: 'rename', label: 'Rename', icon: <Wand2 size={14} /> },
   { key: 'export', label: 'Export', icon: <Download size={14} /> },
 ];
 
-function DatasetDetail({ dataset, onReprocess, reprocessing, onDelete }) {
+function DatasetDetail({ dataset, onReprocess, reprocessing, onDelete, theme, toggleTheme }) {
   const [activeTab, setActiveTab] = useState('dashboard');
 
   // Reset tab when dataset changes
@@ -55,62 +56,52 @@ function DatasetDetail({ dataset, onReprocess, reprocessing, onDelete }) {
   };
 
   return (
-    <>
+    <div className="main-content-inner">
       {/* Header */}
-      <div className="main-header">
+      <header className="main-header">
         <div>
           <h2>{dataset.name}</h2>
-          <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 2 }}>
-            {dataset.row_count?.toLocaleString() || '—'} rows · {dataset.columns?.length || 0} columns · Score: {dataset.health_score ?? '—'}/100
+          <div className="header-subtitle">
+            <div className="pulse-dot" />
+            <span>
+              Active Dataset · {dataset.row_count?.toLocaleString() || '—'} rows · {dataset.columns?.length || 0} cols · Score: {dataset.health_score ?? '—'}/100
+            </span>
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 10 }}>
+        <div className="header-actions">
+          <div className="status-pill">
+            <Activity size={13} />
+            System Healthy
+          </div>
           <button
+            className="icon-btn"
             onClick={onReprocess}
             disabled={reprocessing}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              padding: '7px 14px',
-              borderRadius: 'var(--radius-md)',
-              border: '1px solid var(--border-color)',
-              background: 'var(--bg-card)',
-              color: 'var(--text-secondary)',
-              fontSize: '0.78rem',
-              cursor: 'pointer',
-              transition: 'var(--transition)',
-              fontFamily: 'var(--font-main)',
-            }}
+            title={reprocessing ? 'Reprocessing…' : 'Reprocess'}
           >
-            <RefreshCw size={13} className={reprocessing ? 'spinning' : ''} style={reprocessing ? { animation: 'spin 1s linear infinite' } : {}} />
-            {reprocessing ? 'Reprocessing…' : 'Reprocess'}
+            <RefreshCw size={16} style={reprocessing ? { animation: 'spin 1s linear infinite' } : {}} />
           </button>
-          
           <button
+            className="icon-btn"
             onClick={onDelete}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              padding: '7px 14px',
-              borderRadius: 'var(--radius-md)',
-              border: '1px solid rgba(255, 59, 48, 0.2)',
-              background: 'rgba(255, 59, 48, 0.05)',
-              color: 'var(--accent-red)',
-              fontSize: '0.78rem',
-              cursor: 'pointer',
-              transition: 'var(--transition)',
-              fontFamily: 'var(--font-main)',
-            }}
-            onMouseOver={(e) => { e.currentTarget.style.background = 'rgba(255, 59, 48, 0.1)'; }}
-            onMouseOut={(e) => { e.currentTarget.style.background = 'rgba(255, 59, 48, 0.05)'; }}
+            title="Delete Dataset"
+            style={{ borderColor: 'rgba(239, 68, 68, 0.2)', color: 'var(--accent-red)' }}
           >
-            <Trash2 size={13} />
-            Delete Dataset
+            <Trash2 size={16} />
+          </button>
+          <button className="icon-btn" onClick={toggleTheme} title="Toggle Theme">
+            {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+          </button>
+          <button className="icon-btn" style={{ position: 'relative' }}>
+            <Bell size={16} />
+            <span style={{
+              position: 'absolute', top: 6, right: 6,
+              width: 8, height: 8, background: 'var(--accent-red)',
+              borderRadius: '50%', border: '2px solid var(--bg-card)'
+            }} />
           </button>
         </div>
-      </div>
+      </header>
 
       {/* Tabs */}
       <div className="tab-nav">
@@ -129,35 +120,75 @@ function DatasetDetail({ dataset, onReprocess, reprocessing, onDelete }) {
       <div className="main-body">
         {renderTab()}
       </div>
-    </>
+
+      {/* Footer */}
+      <div className="app-footer">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{ fontWeight: 800 }}>© DATAMORPHIX CORE</span>
+          <span style={{ opacity: 0.3 }}>|</span>
+          <span>NODE_ID: 0XF2A19</span>
+        </div>
+        <div className="footer-status">
+          <div className="status-dot-sm" />
+          <span>STABLE_V4</span>
+        </div>
+      </div>
+    </div>
   );
 }
 
-function WelcomeScreen() {
+function WelcomeScreen({ theme, toggleTheme }) {
   return (
-    <>
-      <div className="main-header">
-        <h2>Welcome to DataMorphix</h2>
-      </div>
+    <div className="main-content-inner">
+      <header className="main-header">
+        <div>
+          <h2>Welcome to DataMorphix</h2>
+          <div className="header-subtitle">
+            <div className="pulse-dot" />
+            <span>AI-Powered Intelligent Data Dictionary</span>
+          </div>
+        </div>
+        <div className="header-actions">
+          <div className="status-pill">
+            <Activity size={13} />
+            System Healthy
+          </div>
+          <button className="icon-btn" onClick={toggleTheme} title="Toggle Theme">
+            {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+          </button>
+        </div>
+      </header>
       <div className="main-body">
         <div className="empty-state" style={{ minHeight: 400 }}>
           <div style={{
             width: 80,
             height: 80,
-            borderRadius: '50%',
-            background: 'rgba(99, 102, 241, 0.1)',
+            borderRadius: '2rem',
+            background: 'rgba(190, 242, 100, 0.1)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            marginBottom: 20,
+            marginBottom: 24,
+            border: '1px solid rgba(190, 242, 100, 0.15)',
           }}>
-            <LayoutDashboard size={32} color="var(--accent-indigo)" />
+            <LayoutDashboard size={32} color="var(--accent)" />
           </div>
           <h3>Select a Dataset to Begin</h3>
           <p>Upload a CSV, Excel, or JSON file from the sidebar, then select it to explore its AI-generated metadata, lineage, governance insights, and more.</p>
         </div>
       </div>
-    </>
+      <div className="app-footer">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{ fontWeight: 800 }}>© DATAMORPHIX CORE</span>
+          <span style={{ opacity: 0.3 }}>|</span>
+          <span>NODE_ID: 0XF2A19</span>
+        </div>
+        <div className="footer-status">
+          <div className="status-dot-sm" />
+          <span>STABLE_V4</span>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -295,20 +326,40 @@ export default function App() {
           <Route
             path="/search"
             element={
-              <>
-                <div className="main-header">
-                  <h2>
-                    <Search size={18} style={{ verticalAlign: 'middle', marginRight: 8 }} />
-                    Global Search
-                  </h2>
-                </div>
+              <div className="main-content-inner">
+                <header className="main-header">
+                  <div>
+                    <h2>
+                      <Search size={18} style={{ verticalAlign: 'middle', marginRight: 8 }} />
+                      Universal Explorer
+                    </h2>
+                    <div className="header-subtitle">
+                      <div className="pulse-dot" />
+                      <span>Search across all datasets</span>
+                    </div>
+                  </div>
+                  <div className="header-actions">
+                    <button className="icon-btn" onClick={toggleTheme} title="Toggle Theme">
+                      {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+                    </button>
+                  </div>
+                </header>
                 <div className="main-body">
                   <SearchPage
                     onSelectDataset={handleSelectDataset}
                     datasets={datasets}
                   />
                 </div>
-              </>
+                <div className="app-footer">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <span style={{ fontWeight: 800 }}>© DATAMORPHIX CORE</span>
+                  </div>
+                  <div className="footer-status">
+                    <div className="status-dot-sm" />
+                    <span>STABLE_V4</span>
+                  </div>
+                </div>
+              </div>
             }
           />
           <Route
@@ -320,9 +371,11 @@ export default function App() {
                   onReprocess={handleReprocess}
                   reprocessing={reprocessing}
                   onDelete={handleDeleteDataset}
+                  theme={theme}
+                  toggleTheme={toggleTheme}
                 />
               ) : (
-                <WelcomeScreen />
+                <WelcomeScreen theme={theme} toggleTheme={toggleTheme} />
               )
             }
           />

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ShieldAlert, AlertTriangle, Info } from 'lucide-react';
+import { ShieldAlert, AlertTriangle, Info, AlertOctagon } from 'lucide-react';
 import { getGovernance } from '../api';
 
 export default function GovernancePanel({ dataset }) {
@@ -21,7 +21,7 @@ export default function GovernancePanel({ dataset }) {
     return (
       <div className="loading-center">
         <div className="spinner lg"></div>
-        <span>Running governance checks…</span>
+        <span>Running Governance Checks…</span>
       </div>
     );
   }
@@ -30,7 +30,7 @@ export default function GovernancePanel({ dataset }) {
     return (
       <div className="empty-state">
         <div className="empty-icon">⚠️</div>
-        <h3>Error Loading Governance</h3>
+        <h3>Analysis Error</h3>
         <p>{error}</p>
       </div>
     );
@@ -39,9 +39,16 @@ export default function GovernancePanel({ dataset }) {
   if (!issues || issues.length === 0) {
     return (
       <div className="empty-state animate-in">
-        <div className="empty-icon">✅</div>
-        <h3>No Issues Found</h3>
-        <p>Your dataset passed all governance checks. Great data quality!</p>
+        <div style={{
+          width: 80, height: 80, borderRadius: 'var(--radius-xl)', 
+          background: 'rgba(34, 197, 94, 0.1)', display: 'flex', 
+          alignItems: 'center', justifyContent: 'center', marginBottom: 24,
+          border: '1px solid rgba(34, 197, 94, 0.2)'
+        }}>
+          <ShieldAlert size={32} color="var(--accent-green)" />
+        </div>
+        <h3>No Governance Violations</h3>
+        <p>This dataset passed all automated security, privacy, and quality checks.</p>
       </div>
     );
   }
@@ -54,34 +61,63 @@ export default function GovernancePanel({ dataset }) {
   const formatType = (type) => type.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
 
   const getIcon = (severity) => {
-    if (severity === 'high') return <AlertTriangle size={15} color="var(--accent-red)" />;
-    if (severity === 'medium') return <AlertTriangle size={15} color="var(--accent-amber)" />;
-    return <Info size={15} color="var(--accent-blue)" />;
+    if (severity === 'high') return <AlertOctagon size={20} color="var(--accent-red)" />;
+    if (severity === 'medium') return <AlertTriangle size={20} color="var(--accent-amber)" />;
+    return <Info size={20} color="var(--accent-blue)" />;
   };
 
   return (
     <div className="animate-in">
-      <div className="card-title" style={{ marginBottom: 8 }}>
+      <div className="card-title" style={{ marginBottom: 24 }}>
         <ShieldAlert size={18} className="icon" />
-        Governance & Quality Issues
+        Governance & Compliance Report
       </div>
-      <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: 16, marginTop: 0 }}>
-        {issues.length} issue{issues.length !== 1 ? 's' : ''} detected —{' '}
-        <span style={{ color: 'var(--accent-red)' }}>{highIssues.length} high</span>,{' '}
-        <span style={{ color: 'var(--accent-amber)' }}>{mediumIssues.length} medium</span>,{' '}
-        <span style={{ color: 'var(--accent-blue)' }}>{lowIssues.length} low</span>
-      </p>
+      
+      {/* Summary Cards */}
+      <div style={{ display: 'flex', gap: 20, marginBottom: 32 }}>
+        <div style={{ flex: 1, background: 'var(--bg-card)', border: '1px solid rgba(239, 68, 68, 0.2)', padding: '20px', borderRadius: 'var(--radius-xl)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            <div style={{ fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 800, color: 'var(--accent-red)', marginBottom: 4 }}>Critical Issues</div>
+            <div style={{ fontSize: '2rem', fontWeight: 800, color: 'var(--text-primary)', lineHeight: 1 }}>{highIssues.length}</div>
+          </div>
+          <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'rgba(239, 68, 68, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <AlertOctagon size={24} color="var(--accent-red)" />
+          </div>
+        </div>
+        <div style={{ flex: 1, background: 'var(--bg-card)', border: '1px solid rgba(245, 158, 11, 0.2)', padding: '20px', borderRadius: 'var(--radius-xl)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            <div style={{ fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 800, color: 'var(--accent-amber)', marginBottom: 4 }}>Warnings</div>
+            <div style={{ fontSize: '2rem', fontWeight: 800, color: 'var(--text-primary)', lineHeight: 1 }}>{mediumIssues.length}</div>
+          </div>
+          <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'rgba(245, 158, 11, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <AlertTriangle size={24} color="var(--accent-amber)" />
+          </div>
+        </div>
+        <div style={{ flex: 1, background: 'var(--bg-card)', border: '1px solid rgba(129, 140, 248, 0.2)', padding: '20px', borderRadius: 'var(--radius-xl)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            <div style={{ fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 800, color: 'var(--accent-blue)', marginBottom: 4 }}>Low Priority</div>
+            <div style={{ fontSize: '2rem', fontWeight: 800, color: 'var(--text-primary)', lineHeight: 1 }}>{lowIssues.length}</div>
+          </div>
+          <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'rgba(129, 140, 248, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Info size={24} color="var(--accent-blue)" />
+          </div>
+        </div>
+      </div>
 
       <div className="governance-list">
         {issues.map((issue, idx) => (
-          <div className="governance-issue" key={idx}>
-            {getIcon(issue.severity)}
-            <div className="issue-content">
-              <div className="issue-type">{formatType(issue.issue_type)}</div>
-              <div className="issue-column">Column: {issue.column_name}</div>
-              <div className="issue-message">{issue.message}</div>
+          <div className="governance-issue" key={idx} style={{ padding: '24px', alignItems: 'center' }}>
+            <div style={{ padding: '12px', background: 'var(--bg-primary)', borderRadius: '50%' }}>
+              {getIcon(issue.severity)}
             </div>
-            <span className={`severity-badge ${issue.severity}`}>{issue.severity}</span>
+            <div className="issue-content">
+              <div className="issue-type" style={{ fontSize: '1rem', fontWeight: 800 }}>{formatType(issue.issue_type)}</div>
+              <div className="issue-message" style={{ fontSize: '0.85rem', marginBottom: 8 }}>{issue.message}</div>
+              <div className="issue-column" style={{ display: 'inline-block', background: 'var(--bg-input)', padding: '4px 10px', borderRadius: 'var(--radius-sm)' }}>
+                Field: {issue.column_name}
+              </div>
+            </div>
+            <span className={`severity-badge ${issue.severity}`} style={{ padding: '6px 16px' }}>{issue.severity}</span>
           </div>
         ))}
       </div>
