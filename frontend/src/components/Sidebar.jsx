@@ -33,7 +33,7 @@ export default function Sidebar({
       <div className="sidebar-brand">
         <h1>
           <div className="brand-icon-wrap">
-            <Zap size={18} color="#18181b" />
+            <Zap size={18} color="var(--bg-sidebar)" />
           </div>
           DM_CORE
         </h1>
@@ -124,14 +124,14 @@ export default function Sidebar({
       </div>
       
       {/* Profile / Theme */}
-      <div className="sidebar-section" style={{ borderTop: '1px solid var(--border-color)', marginTop: 'auto', padding: '16px' }}>
+      <div className="sidebar-section" style={{ borderTop: '1px solid var(--sidebar-border)', marginTop: 'auto', padding: '16px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-          <div style={{ width: 36, height: 36, borderRadius: 'var(--radius-md)', background: 'var(--bg-input)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <User size={18} color="var(--text-muted)" />
+          <div style={{ width: 36, height: 36, borderRadius: 'var(--radius-md)', background: 'var(--sidebar-hover)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <User size={18} color="var(--sidebar-text)" />
           </div>
           <div>
-            <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-primary)' }}>Admin User</div>
-            <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 600 }}>Workspace Owner</div>
+            <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--sidebar-text-active)' }}>Admin User</div>
+            <div style={{ fontSize: '0.65rem', color: 'var(--sidebar-text)', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 600 }}>Workspace Owner</div>
           </div>
         </div>
         {/* We moved the theme toggle to the top right, but if we want to keep it here, it could be a small button.

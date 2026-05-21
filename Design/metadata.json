@@ -1,8 +1,0 @@
-{
-  "name": "DataMorphix",
-  "description": "Industrial intelligence dashboard for data engineers and analysts to explore, govern, and query datasets with DataMorphix.",
-  "requestFramePermissions": [],
-  "majorCapabilities": [
-    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
-  ]
-}
