@@ -72,8 +72,40 @@
 }
 
 [data-theme="dark"] {
-  /* Inherit the same hybrid theme so toggle does not ruin the design */
-  /* If full dark is needed, these can be modified later, but for now we enforce the unique design */
+  /* Sidebar (stays dark, minor tweaks) */
+  --bg-sidebar: #060d0e;
+  --sidebar-hover: #0f1a1c;
+  --sidebar-border: #111c1e;
+  --sidebar-text: #5a6a72;
+  --sidebar-text-active: #e8ecf0;
+
+  /* Main Content (Dark) */
+  --bg-primary: #0c1214;
+  --bg-secondary: #111a1d;
+  --bg-card: #141e22;
+  --bg-card-hover: #182428;
+  --bg-surface: #182226;
+  --bg-input: #111a1d;
+
+  /* Borders */
+  --border-color: rgba(255, 255, 255, 0.06);
+  --border-light: rgba(255, 255, 255, 0.04);
+  --border-glow: rgba(44, 193, 113, 0.25);
+
+  /* Text */
+  --text-primary: #e2e8ee;
+  --text-secondary: #99a5af;
+  --text-muted: #5f6d78;
+  --text-dim: #3e4e58;
+
+  /* Shadows */
+  --shadow-card: 0 4px 20px rgba(0, 0, 0, 0.25);
+  --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.4);
+  --shadow-glow: 0 0 15px rgba(44, 193, 113, 0.12);
+  --shadow-glow-accent: 0 0 25px rgba(44, 193, 113, 0.18);
+
+  /* Gradients */
+  --gradient-card: linear-gradient(145deg, #182226, #141e22);
 }
 
 /* ──── Reset & Base ──── */
