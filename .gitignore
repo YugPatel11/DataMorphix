@@ -7,3 +7,19 @@ backend/.env.*
 # Python cache
 __pycache__/
 *.py[cod]
+*/__pycache__/
+
+# Database
+backend/db.sqlite3
+
+# Uploads
+backend/media/datasets/
+
+# Node modules
+frontend/node_modules/
+frontend/dist/
+
+# Raw Data
+*.csv
+*.xlsx
+*.xls
