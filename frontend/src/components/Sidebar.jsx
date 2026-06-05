@@ -132,6 +132,7 @@ export default function Sidebar({
           <div>
             <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--sidebar-text-active)' }}>Admin User</div>
             <div style={{ fontSize: '0.65rem', color: 'var(--sidebar-text)', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 600 }}>Workspace Owner</div>
+          </div>
         </div>
       </div>
     </aside>

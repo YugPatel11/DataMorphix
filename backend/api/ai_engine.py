@@ -1,5 +1,5 @@
 import os
-import google.generativeai as genai
+from google import genai
 import json
 from pathlib import Path
 
@@ -23,15 +23,16 @@ load_local_env()
 # Initialize Gemini API. The API key should be in environment variables.
 api_key = os.getenv('GEMINI_API_KEY') or os.getenv('GOOGLE_API_KEY')
 if api_key and api_key != 'MOCK_KEY_FOR_LOCAL_DEV':
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel('gemini-2.5-pro')
+    client = genai.Client(api_key=api_key)
+    model_name = 'gemma-4-31b-it'
 else:
-    model = None
+    client = None
+    model_name = None
 
 
 def get_all_columns_metadata(dataset_name, columns_summary):
     """Uses LLM to generate metadata for all columns in one API call to save tokens and time."""
-    if not model:
+    if not client:
         return {col['name']: f"Real AI desc for {col['name']} (Requires API key)" for col in columns_summary}
 
     prompt = f"""
@@ -42,7 +43,7 @@ def get_all_columns_metadata(dataset_name, columns_summary):
     Example format: {{"col_name": "description", "col2": "description"}}
     """
     try:
-        response = model.generate_content(prompt)
+        response = client.models.generate_content(model=model_name, contents=prompt)
         text = response.text.replace('```json', '').replace('```', '').strip()
         return json.loads(text)
     except Exception as e:
@@ -52,7 +53,7 @@ def get_all_columns_metadata(dataset_name, columns_summary):
 
 def generate_dataset_summary(dataset_name, columns_info):
     """Uses LLM to generate a summary for the entire dataset."""
-    if not model:
+    if not client:
         return f"Real AI summary for {dataset_name} (Requires GEMINI_API_KEY)"
 
     prompt = f"""
@@ -61,7 +62,7 @@ def generate_dataset_summary(dataset_name, columns_info):
     Provide a concise paragraph explaining the likely purpose of this dataset.
     """
     try:
-        response = model.generate_content(prompt)
+        response = client.models.generate_content(model=model_name, contents=prompt)
         return response.text.strip()
     except Exception as e:
         return f"AI Error: {str(e)}"
@@ -69,7 +70,7 @@ def generate_dataset_summary(dataset_name, columns_info):
 
 def analyze_query(dataset_name, columns_info, user_query):
     """Uses LLM to analyze query and produce answer with optional chart planning."""
-    if not model:
+    if not client:
         return {
             "answer": f"Mock AI answer for '{user_query}'",
             "pandas_code": None,
@@ -106,7 +107,7 @@ def analyze_query(dataset_name, columns_info, user_query):
     }}
     """
     try:
-        response = model.generate_content(prompt)
+        response = client.models.generate_content(model=model_name, contents=prompt)
         text = response.text.replace('```json', '').replace('```', '').strip()
         return json.loads(text)
     except Exception as e:
@@ -120,11 +121,11 @@ def analyze_query(dataset_name, columns_info, user_query):
 
 def suggest_rename(column_name):
     """Suggest a clean, standard name for a single column."""
-    if not model:
+    if not client:
         return column_name
     prompt = f"Suggest a clean, standard snake_case name for the column: '{column_name}'. Reply with ONLY the name."
     try:
-        response = model.generate_content(prompt)
+        response = client.models.generate_content(model=model_name, contents=prompt)
         return response.text.strip()
     except Exception:
         return column_name
@@ -135,7 +136,7 @@ def get_all_rename_suggestions(column_names):
     Uses LLM to suggest better names for all columns in one batched API call.
     Returns a dict mapping original_name -> suggested_name.
     """
-    if not model:
+    if not client:
         return {col: col for col in column_names}
 
     prompt = f"""
@@ -145,7 +146,7 @@ def get_all_rename_suggestions(column_names):
     Example: {{"cust_nm": "customer_name", "email": "email"}}
     """
     try:
-        response = model.generate_content(prompt)
+        response = client.models.generate_content(model=model_name, contents=prompt)
         text = response.text.replace('```json', '').replace('```', '').strip()
         return json.loads(text)
     except Exception as e:

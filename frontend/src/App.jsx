@@ -92,14 +92,7 @@ function DatasetDetail({ dataset, onReprocess, reprocessing, onDelete, theme, to
           <button className="icon-btn" onClick={toggleTheme} title="Toggle Theme">
             {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
           </button>
-          <button className="icon-btn" style={{ position: 'relative' }}>
-            <Bell size={16} />
-            <span style={{
-              position: 'absolute', top: 6, right: 6,
-              width: 8, height: 8, background: 'var(--accent-red)',
-              borderRadius: '50%', border: '2px solid var(--bg-card)'
-            }} />
-          </button>
+          
         </div>
       </header>
 
@@ -245,6 +238,7 @@ export default function App() {
       setSelectedDataset(refreshed);
       setCurrentPage('dashboard');
       navigate('/');
+      window.location.reload();
     } catch (err) {
       console.error('Upload failed:', err);
       const message = err.response?.data?.error || err.message || 'Unknown error';
@@ -274,6 +268,7 @@ export default function App() {
       const updated = await reprocessDataset(selectedDataset.id);
       setSelectedDataset(updated);
       await loadDatasets();
+      window.location.reload();
     } catch (err) {
       console.error('Reprocess failed:', err);
     } finally {
