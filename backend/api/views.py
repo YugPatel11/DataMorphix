@@ -1,6 +1,7 @@
 import pandas as pd
 import json
 import csv
+import math
 from django.http import HttpResponse
 from django.db.models import Q
 from rest_framework import viewsets, status
@@ -31,6 +32,194 @@ class DatasetViewSet(viewsets.ModelViewSet):
         elif extension == 'json':
             return pd.read_json(file_path)
         return None
+
+    def _safe_float(self, value, default: float = 0.0) -> float:
+        """Convert pandas/numpy values into regular Python floats for JSON serialization."""
+        try:
+            if pd.isna(value):
+                return default
+            return float(value)
+        except (TypeError, ValueError):
+            return default
+
+    def _numeric_relation(self, left_name: str, right_name: str, left_series: pd.Series, right_series: pd.Series) -> dict | None:
+        """
+        Detect a linear relationship between two numeric columns.
+        Uses Pearson correlation coefficient.
+        """
+        pair = pd.DataFrame({
+            left_name: pd.to_numeric(left_series, errors='coerce'),
+            right_name: pd.to_numeric(right_series, errors='coerce'),
+        }).dropna()
+
+        if len(pair) < 3:
+            return None
+
+        # Compute Pearson correlation coefficient
+        correlation = self._safe_float(pair[left_name].corr(pair[right_name]))
+        score = abs(correlation)
+        if score < 0.55:
+            return None
+
+        direction = 'move together' if correlation > 0 else 'move in opposite directions'
+        return {
+            'left_column': left_name,
+            'right_column': right_name,
+            'relationship_type': 'Numeric correlation',
+            'score': round(score, 2),
+            'evidence': f'Pearson correlation: {correlation:.2f}',
+            'explanation': f'Values in these two columns tend to {direction}.',
+        }
+
+    def _categorical_relation(self, left_name: str, right_name: str, left_series: pd.Series, right_series: pd.Series) -> dict | None:
+        """
+        Detect association between two category-like columns using Cramer's V.
+        Cramer's V measures the strength of association between two nominal variables.
+        """
+        pair = pd.DataFrame({
+            'left': left_series,
+            'right': right_series,
+        }).dropna()
+
+        if len(pair) < 3:
+            return None
+
+        left_unique = pair['left'].nunique()
+        right_unique = pair['right'].nunique()
+        if left_unique < 2 or right_unique < 2:
+            return None
+
+        # Very high-cardinality columns create noisy cross-tabs, so skip them here.
+        if left_unique > 50 or right_unique > 50:
+            return None
+
+        # Create contingency table
+        table = pd.crosstab(pair['left'].astype(str), pair['right'].astype(str))
+        if table.shape[0] < 2 or table.shape[1] < 2:
+            return None
+
+        # Compute Chi-Square statistic and Cramer's V
+        total = table.values.sum()
+        expected = table.sum(axis=1).to_numpy()[:, None] * table.sum(axis=0).to_numpy()[None, :] / total
+        chi_square = (((table.to_numpy() - expected) ** 2) / expected).sum()
+        denominator = min(table.shape[0] - 1, table.shape[1] - 1)
+        score = math.sqrt((chi_square / total) / denominator) if denominator > 0 else 0
+
+        if score < 0.35:
+            return None
+
+        return {
+            'left_column': left_name,
+            'right_column': right_name,
+            'relationship_type': 'Category association',
+            'score': round(score, 2),
+            'evidence': f"Cramer's V: {score:.2f}",
+            'explanation': 'The category choices in one column often line up with the other.',
+        }
+
+    def _category_to_number_relation(self, category_name: str, number_name: str, category_series: pd.Series, number_series: pd.Series) -> dict | None:
+        """
+        Detect whether a category column separates a numeric measure into clear groups.
+        Uses the correlation ratio (Eta), representing the proportion of variance explained.
+        """
+        pair = pd.DataFrame({
+            'category': category_series,
+            'value': pd.to_numeric(number_series, errors='coerce'),
+        }).dropna()
+
+        if len(pair) < 3:
+            return None
+
+        group_count = pair['category'].nunique()
+        if group_count < 2 or group_count > 50:
+            return None
+
+        # Calculate between-group variance and total variance
+        overall_mean = pair['value'].mean()
+        grouped = pair.groupby(pair['category'].astype(str))['value']
+        between_group_variance = sum(len(values) * ((values.mean() - overall_mean) ** 2) for _, values in grouped)
+        total_variance = ((pair['value'] - overall_mean) ** 2).sum()
+        score = math.sqrt(between_group_variance / total_variance) if total_variance > 0 else 0
+
+        if score < 0.35:
+            return None
+
+        return {
+            'left_column': category_name,
+            'right_column': number_name,
+            'relationship_type': 'Category affects measure',
+            'score': round(score, 2),
+            'evidence': f'Correlation ratio: {score:.2f}',
+            'explanation': f'Numeric values in {number_name} change noticeably across {category_name} groups.',
+        }
+
+    def _missing_value_relation(self, left_name: str, right_name: str, left_series: pd.Series, right_series: pd.Series) -> dict | None:
+        """
+        Detect columns that become blank together (shared missingness).
+        Uses Jaccard similarity index on missing value indicators.
+        """
+        left_missing = left_series.isna()
+        right_missing = right_series.isna()
+        union = int((left_missing | right_missing).sum())
+
+        if union == 0:
+            return None
+
+        overlap = int((left_missing & right_missing).sum())
+        score = overlap / union
+        if score < 0.75:
+            return None
+
+        return {
+            'left_column': left_name,
+            'right_column': right_name,
+            'relationship_type': 'Shared missing pattern',
+            'score': round(score, 2),
+            'evidence': f'{overlap} shared blank rows',
+            'explanation': 'These columns are frequently blank on the same rows.',
+        }
+
+    def _internal_column_relations(self, df: pd.DataFrame) -> list[dict]:
+        """
+        Find useful relationships between columns inside one selected dataset.
+        Checks for shared missing patterns, correlations, and categorical associations.
+        """
+        columns = list(df.columns)
+        relations = []
+
+        for left_index, left_name in enumerate(columns):
+            for right_name in columns[left_index + 1:]:
+                left_series = df[left_name]
+                right_series = df[right_name]
+                candidates = []
+
+                # Check shared missing pattern
+                missing_match = self._missing_value_relation(left_name, right_name, left_series, right_series)
+                if missing_match:
+                    candidates.append(missing_match)
+
+                # Determine variable types
+                left_is_numeric = pd.api.types.is_numeric_dtype(left_series)
+                right_is_numeric = pd.api.types.is_numeric_dtype(right_series)
+
+                if left_is_numeric and right_is_numeric:
+                    relation = self._numeric_relation(left_name, right_name, left_series, right_series)
+                elif left_is_numeric and not right_is_numeric:
+                    relation = self._category_to_number_relation(right_name, left_name, right_series, left_series)
+                elif right_is_numeric and not left_is_numeric:
+                    relation = self._category_to_number_relation(left_name, right_name, left_series, right_series)
+                else:
+                    relation = self._categorical_relation(left_name, right_name, left_series, right_series)
+
+                if relation:
+                    candidates.append(relation)
+
+                if candidates:
+                    best_relation = max(candidates, key=lambda item: item['score'])
+                    relations.append(best_relation)
+
+        relations.sort(key=lambda item: item['score'], reverse=True)
+        return relations[:24]
 
     def _process_dataset(self, dataset, df):
         """Core processing logic: metadata extraction, AI analysis, governance, lineage, relationships."""
@@ -352,7 +541,21 @@ class DatasetViewSet(viewsets.ModelViewSet):
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-    # ── Rename Suggestions ──
+    # Relationships inside the selected table
+    @action(detail=True, methods=['get'], url_path='internal-relations')
+    def internal_relations(self, request, pk=None):
+        dataset = self.get_object()
+        try:
+            df = self._read_dataframe(dataset.file.path, dataset.name)
+            if df is None:
+                return Response({'error': 'Cannot read dataset file'}, status=status.HTTP_400_BAD_REQUEST)
+
+            relations = self._internal_column_relations(df)
+            return Response(relations)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    # Rename Suggestions
     @action(detail=True, methods=['get'], url_path='rename-suggestions')
     def rename_suggestions(self, request, pk=None):
         dataset = self.get_object()

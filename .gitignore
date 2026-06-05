@@ -19,6 +19,18 @@ backend/media/datasets/
 frontend/node_modules/
 frontend/dist/
 
+# Virtual Environments
+.venv/
+backend/.venv/
+venv/
+ENV/
+
+# Logs
+*.log
+backend/*.log
+frontend/*.log
+npm-debug.log*
+
 # Raw Data
 *.csv
 *.xlsx

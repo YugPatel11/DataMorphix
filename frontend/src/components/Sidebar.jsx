@@ -132,11 +132,7 @@ export default function Sidebar({
           <div>
             <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--sidebar-text-active)' }}>Admin User</div>
             <div style={{ fontSize: '0.65rem', color: 'var(--sidebar-text)', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 600 }}>Workspace Owner</div>
-          </div>
         </div>
-        {/* We moved the theme toggle to the top right, but if we want to keep it here, it could be a small button.
-            Given the design, we can either remove it or keep a minimal version.
-            We will remove it from here since we added it to the top App header. */}
       </div>
     </aside>
   );

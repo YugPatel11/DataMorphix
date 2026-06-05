@@ -1062,34 +1062,89 @@ h1, h2, h3, h4, h5, h6 {
   transform: translateY(-2px);
 }
 
+.relationships-title {
+  margin-bottom: 24px;
+  justify-content: space-between;
+}
+
+.relationships-title span {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.relationships-title small {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.internal-rel-card {
+  display: block;
+  overflow: hidden;
+  padding: 0;
+}
+
+.rel-card-body {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 24px;
+}
+
 .rel-arrow {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: var(--bg-input);
   color: var(--accent);
   font-size: 1.1rem;
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .rel-endpoint {
+  flex: 1;
   min-width: 0;
 }
 
+.rel-endpoint.right {
+  text-align: right;
+}
+
 .rel-endpoint .rel-dataset {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: 0.6rem;
   color: var(--text-dim);
   text-transform: uppercase;
   letter-spacing: 2px;
   font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.rel-endpoint.right .rel-dataset {
+  justify-content: flex-end;
 }
 
 .rel-endpoint .rel-column {
-  font-size: 0.9rem;
+  font-size: 1rem;
   font-weight: 700;
   color: var(--text-primary);
   font-family: var(--font-mono);
-  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+}
+
+.rel-endpoint .rel-column.accent {
+  color: var(--accent-indigo);
 }
 
 .rel-confidence {
-  margin-left: auto;
   padding: 4px 12px;
   border-radius: var(--radius-full);
   background: rgba(190, 242, 100, 0.1);
@@ -1098,6 +1153,54 @@ h1, h2, h3, h4, h5, h6 {
   font-weight: 700;
   flex-shrink: 0;
   border: 1px solid rgba(190, 242, 100, 0.15);
+  font-family: var(--font-mono);
+}
+
+.rel-details {
+  border-top: 1px solid var(--border-color);
+  padding: 16px 24px 20px;
+}
+
+.rel-details p {
+  margin: 8px 0;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.rel-details span {
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+}
+
+.rel-type {
+  color: var(--text-primary);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.relation-state-icon {
+  width: 80px;
+  height: 80px;
+  border-radius: var(--radius-xl);
+  background: rgba(190, 242, 100, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 24px;
+  border: 1px solid rgba(190, 242, 100, 0.15);
+}
+
+.relation-state-icon.error {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.18);
+}
+
+.spin-icon {
+  animation: spin 1s linear infinite;
 }
 
 /* ──── Governance ──── */

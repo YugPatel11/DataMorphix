@@ -64,8 +64,13 @@ export async function getUsageInsights(id) {
   return res.data;
 }
 
-// ── Rename Suggestions ──
+// Column relationships inside one selected dataset
+export async function getInternalRelations(id) {
+  const res = await api.get(`/datasets/${id}/internal-relations/`);
+  return res.data;
+}
 
+// Rename Suggestions
 export async function getRenameSuggestions(id) {
   const res = await api.get(`/datasets/${id}/rename-suggestions/`);
   return res.data;
