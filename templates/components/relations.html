@@ -1,0 +1,51 @@
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in">
+  <div class="card glow-hover">
+    <div class="card-header">
+      <div class="card-title">
+        <i data-lucide="link" class="icon w-4.5 h-4.5 text-blue-500"></i>
+        Cross-Dataset Relations
+      </div>
+    </div>
+    <div class="overflow-x-auto w-full">
+      <table class="min-w-full divide-y divide-zinc-200 dark:divide-zinc-800 text-left text-xs text-zinc-500 dark:text-zinc-400" id="relations-cross-table">
+        <thead class="text-zinc-700 dark:text-zinc-300 uppercase tracking-wider font-extrabold" style="background: var(--bg-input);">
+          <tr>
+            <th class="px-5 py-3.5">Source</th>
+            <th class="px-5 py-3.5">Target</th>
+            <th class="px-5 py-3.5 text-center">Match</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-zinc-200 dark:divide-zinc-800" id="relations-cross-body">
+          <tr>
+            <td colspan="3" class="px-5 py-6 text-center text-zinc-500 italic">No cross-dataset relations detected.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card glow-hover">
+    <div class="card-header">
+      <div class="card-title">
+        <i data-lucide="network" class="icon w-4.5 h-4.5 text-purple-500"></i>
+        Internal Column Correlations
+      </div>
+    </div>
+    <div class="overflow-x-auto w-full">
+      <table class="min-w-full divide-y divide-zinc-200 dark:divide-zinc-800 text-left text-xs text-zinc-500 dark:text-zinc-400" id="relations-internal-table">
+        <thead class="text-zinc-700 dark:text-zinc-300 uppercase tracking-wider font-extrabold" style="background: var(--bg-input);">
+          <tr>
+            <th class="px-5 py-3.5">Left Col</th>
+            <th class="px-5 py-3.5">Right Col</th>
+            <th class="px-5 py-3.5">Type / Strength</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-zinc-200 dark:divide-zinc-800" id="relations-internal-body">
+          <tr>
+            <td colspan="3" class="px-5 py-6 text-center text-zinc-500 italic">No internal column associations found.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>

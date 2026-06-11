@@ -1,0 +1,75 @@
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in">
+  <!-- Conversation History (Chat) -->
+  <div class="lg:col-span-2 card glow-hover flex flex-col h-[70vh]">
+    <div class="card-title mb-4 flex-shrink-0">
+      <i data-lucide="sparkles" class="icon w-4.5 h-4.5"></i>
+      Ask Questions
+    </div>
+
+    <!-- Suggestion Chips -->
+    <div id="query-chips" class="flex flex-wrap gap-2.5 mb-4 flex-shrink-0">
+      <button class="chip-btn text-xs font-semibold py-2 px-4.5 rounded-full border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 hover:border-indigo-500 hover:text-indigo-500 transition cursor-pointer" onclick="setQueryText('Show a bar chart of top values')">Top Values Bar Chart</button>
+      <button class="chip-btn text-xs font-semibold py-2 px-4.5 rounded-full border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 hover:border-indigo-500 hover:text-indigo-500 transition cursor-pointer" onclick="setQueryText('Which columns have missing values?')">Missing Values</button>
+      <button class="chip-btn text-xs font-semibold py-2 px-4.5 rounded-full border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 hover:border-indigo-500 hover:text-indigo-500 transition cursor-pointer" onclick="setQueryText('Show a pie chart of data type distribution')">Type Distribution</button>
+    </div>
+
+    <!-- Chat Bubbles -->
+    <div id="chat-history" class="flex-1 overflow-y-auto space-y-6 pr-2 mb-4">
+      <div class="empty-state py-8">
+        <i data-lucide="bot" class="w-10 h-10 text-zinc-400 mb-2"></i>
+        <p class="text-sm text-zinc-500">How can I help you analyze this dataset?</p>
+      </div>
+    </div>
+
+    <!-- Chat Form -->
+    <form id="chat-form" class="query-input-row flex-shrink-0">
+      <input type="text" id="chat-input" class="query-input" placeholder="Ask anything about your data..." />
+      <button type="submit" class="query-send-btn flex items-center gap-1">
+        <i data-lucide="send" class="w-4 h-4"></i> Ask
+      </button>
+    </form>
+  </div>
+
+  <!-- Refinement Engine (Modifications & Undo/Redo) -->
+  <div class="card glow-hover flex flex-col h-[70vh]">
+    <div class="card-title mb-4 flex-shrink-0">
+      <i data-lucide="settings" class="icon w-4.5 h-4.5 text-indigo-500"></i>
+      Dataset Refinement
+    </div>
+    
+    <div class="text-xs text-zinc-500 dark:text-zinc-400 mb-6 leading-relaxed flex-shrink-0">
+      Modify the dataset structure using natural language. Add new columns, edit records, drop unneeded columns, or standardize values.
+    </div>
+
+    <!-- Undo / Redo Toolbar -->
+    <div class="flex items-center gap-3 mb-6 bg-zinc-50 dark:bg-zinc-900 p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 flex-shrink-0">
+      <div class="text-[10px] font-bold uppercase tracking-wider text-zinc-400 flex-1">Version Control</div>
+      <button id="refine-undo" class="flex items-center justify-center w-8 h-8 rounded-lg border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-zinc-950 dark:hover:text-white transition disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer" title="Undo">
+        <i data-lucide="undo-2" class="w-4 h-4"></i>
+      </button>
+      <button id="refine-redo" class="flex items-center justify-center w-8 h-8 rounded-lg border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-zinc-950 dark:hover:text-white transition disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer" title="Redo">
+        <i data-lucide="redo-2" class="w-4 h-4"></i>
+      </button>
+      <div class="text-xs font-mono font-semibold px-2 py-1 bg-zinc-200 dark:bg-zinc-800 rounded text-zinc-600 dark:text-zinc-300" id="refine-version-badge">v0</div>
+    </div>
+
+    <!-- Refine Form -->
+    <form id="refine-form" class="space-y-4 mb-6 flex-shrink-0">
+      <div class="space-y-1.5">
+        <label for="refine-input" class="text-[10px] font-bold uppercase tracking-wider text-zinc-400">NL Command</label>
+        <textarea id="refine-input" class="w-full text-sm p-3.5 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl focus:outline-none focus:border-indigo-500 transition text-zinc-800 dark:text-zinc-100 placeholder-zinc-400" rows="3" placeholder="e.g. Add column tax = salary * 0.15"></textarea>
+      </div>
+      <button type="submit" class="w-full py-3 bg-[#2cc171] hover:bg-[#26a862] text-zinc-900 font-extrabold text-xs uppercase tracking-wider rounded-xl transition cursor-pointer" id="refine-btn">
+        Apply Modification
+      </button>
+    </form>
+
+    <!-- History Logs of Modifications -->
+    <div class="flex-1 overflow-y-auto min-h-0">
+      <div class="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-2">Applied Changes</div>
+      <ul class="space-y-2.5 text-xs text-zinc-600 dark:text-zinc-400" id="refine-logs">
+        <li class="italic text-zinc-500 py-2">No modifications applied yet.</li>
+      </ul>
+    </div>
+  </div>
+</div>
