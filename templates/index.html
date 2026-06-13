@@ -1375,10 +1375,6 @@
           <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
           Governance
         </button>
-        <button class="tab-btn" data-tab="usage">
-          <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-          Usage
-        </button>
         <button class="tab-btn" data-tab="rename">
           <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4V2"/><path d="M15 16v-2"/><path d="M8 9h2"/><path d="M20 9h2"/><path d="M17.8 11.8 19 13"/><path d="M15 9h0"/><path d="M17.8 6.2 19 5"/><path d="m3 21 9-9"/><path d="M12.2 6.2 11 5"/></svg>
           Rename
@@ -1644,35 +1640,7 @@
           </div>
         </div>
 
-        <!-- Usage Panel -->
-        <div id="panel-usage" class="tab-panel hidden">
-          <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
-            <div class="card glow-hover">
-              <div class="card-header">
-                <div class="card-title">
-                  <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--accent-sky)" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                  Empty Columns &amp; Spares
-                </div>
-              </div>
-              <div style="display:flex; flex-direction:column; gap:8px;" id="usage-empty-list">
-                <p style="font-size:0.72rem; color:var(--text-muted); font-style:italic;">No empty columns found.</p>
-              </div>
-            </div>
-
-            <div class="card glow-hover">
-              <div class="card-header">
-                <div class="card-title">
-                  <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--accent-amber)" stroke-width="2.5"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-                  Duplicate Record Indicators
-                </div>
-              </div>
-              <div style="text-align:center; padding:24px;" id="usage-duplicate-box">
-                <div style="font-size:3rem; font-weight:900; color:var(--text-primary); letter-spacing:-2px; line-height:1;" id="usage-dup-count">—</div>
-                <div style="font-size:0.68rem; color:var(--text-muted); margin-top:10px;">Identical rows detected across the dataset.</div>
-              </div>
-            </div>
-          </div>
-        </div>
+      
 
         <!-- Rename Panel -->
         <div id="panel-rename" class="tab-panel hidden">

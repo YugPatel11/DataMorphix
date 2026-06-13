@@ -68,11 +68,11 @@ except ImportError:
 # NOTE: gemini-2.0-flash-lite is free-tier quota exhausted on all keys.
 #       Using gemini-2.5-flash for all tiers (free tier, generous quota).
 
-MODEL_NANO    = 'gemini-3.1-flash-lite'   # Bulk descriptions & renames
-MODEL_SUMMARY = 'gemini-2.5-flash'        # Dataset summaries
-MODEL_QUERY   = 'gemini-3-flash'          # User queries
-MODEL_PLAN    = 'gemini-3.5-flash'        # Adaptive analytics plans
-MODEL_SMART   = 'gemma-4-31b'             # Code generation (slow, use sparingly)
+MODEL_NANO    = 'gemini-2.5-flash'   # Bulk descriptions & renames
+MODEL_SUMMARY = 'gemini-2.5-flash'   # Dataset summaries
+MODEL_QUERY   = 'gemini-2.5-flash'   # User queries
+MODEL_PLAN    = 'gemini-2.5-flash'   # Adaptive analytics plans
+MODEL_SMART   = 'gemini-2.5-flash'   # Code generation
 
 
 # ── API Key Pool ──────────────────────────────────────────────────────────────
@@ -118,23 +118,27 @@ def _rotate_key():
 
 
 def _call_with_rotation(model: str, prompt: str, max_attempts: int = None) -> str | None:
+    global _key_index
     """
-    Call Gemini with automatic key rotation on quota/rate-limit errors.
+    Call Gemini with automatic key rotation. Skips invalid keys automatically.
     Returns the response text or None on total failure.
     """
     if not _GENAI_AVAILABLE or not _API_KEYS:
         return None
 
-    attempts = max_attempts or len(_API_KEYS)
-    tried = set()
+    attempts = max_attempts or (len(_API_KEYS) * 2)
+    tried_keys = set()
 
     for _ in range(attempts):
         with _key_lock:
-            current = _key_index
+            if not _API_KEYS:
+                break
+            current_idx = _key_index
+            current_key = _API_KEYS[current_idx]
 
-        if current in tried:
+        if current_key in tried_keys:
             break
-        tried.add(current)
+        tried_keys.add(current_key)
 
         try:
             client = _get_client()
@@ -142,10 +146,20 @@ def _call_with_rotation(model: str, prompt: str, max_attempts: int = None) -> st
             return response.text
         except Exception as e:
             err_str = str(e).lower()
-            # Quota / rate limit / auth errors → rotate key
+            # Remove invalid API keys
+            if any(x in err_str for x in ('401', 'unauthenticated', 'invalid api key', 'api_key_invalid')):
+                print(f"[AI Engine] Key at index {current_idx} is invalid. Removing from pool.")
+                with _key_lock:
+                    if current_key in _API_KEYS:
+                        _API_KEYS.remove(current_key)
+                        _key_index = _key_index % len(_API_KEYS) if _API_KEYS else 0
+                continue
+
+            # Quota / rate limit / permission errors → rotate key
             if any(x in err_str for x in ('quota', '429', 'resource_exhausted',
-                                            'rate', 'limit', 'exhausted')):
-                print(f"[AI Engine] Key {current} quota hit: {e}")
+                                            'rate limit', 'limit', 'exhausted',
+                                            '403', 'permission_denied', 'denied access')):
+                print(f"[AI Engine] Key {current_idx} quota hit: {e}")
                 rotated = _rotate_key()
                 if not rotated:
                     print("[AI Engine] No more keys to rotate to.")

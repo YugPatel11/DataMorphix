@@ -358,7 +358,7 @@ class DatasetViewSet(viewsets.ModelViewSet):
             new_name = f"{dataset.id}_v0_{file_obj.name}"
             new_path = media_dir / new_name
 
-            os.rename(old_path, new_path)
+            os.replace(old_path, new_path)
 
             dataset.file = f"datasets/{new_name}"
             dataset.current_version = 0
@@ -734,8 +734,15 @@ class DatasetViewSet(viewsets.ModelViewSet):
                 return Response({'error': 'Cannot read dataset file'}, status=status.HTTP_400_BAD_REQUEST)
 
             result = self._generate_analytics_for_dataset(dataset, df)
-            if 'error' in result:
-                return Response(result, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            if result is None or 'error' in result:
+                # AI unavailable — return empty but valid response (not 500)
+                return Response({
+                    'dataset_id': dataset.id,
+                    'dataset_name': dataset.name,
+                    'total_analyses': 0,
+                    'analyses': [],
+                    'ai_unavailable': True,
+                })
             return Response(result)
 
         except Exception as e:
