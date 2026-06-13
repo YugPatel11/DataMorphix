@@ -1519,6 +1519,9 @@
               <form id="chat-form" style="flex-shrink:0;">
                 <div class="query-input-row">
                   <input type="text" id="chat-input" class="query-input" placeholder="Ask anything about your data..." />
+                  <button type="button" id="mic-btn" class="icon-btn" style="border:none; background:transparent; width:30px; height:30px; color:var(--text-muted);" title="Ask using voice">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
+                  </button>
                   <button type="submit" class="query-send-btn">
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
                     Ask
@@ -2120,18 +2123,16 @@
   const chatForm    = document.getElementById('chat-form');
   const chatInput   = document.getElementById('chat-input');
   const chatHistory = document.getElementById('chat-history');
+  const micBtn      = document.getElementById('mic-btn');
 
   function setQueryText(text) {
     chatInput.value = text;
     chatInput.focus();
   }
 
-  chatForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const q = chatInput.value.strip();
+  async function submitQuery(q) {
     if (!q || !selectedDataset) return;
-    chatInput.value = '';
-
+    
     queryLogs.push({ role: 'user', text: q });
     renderChatLog();
 
@@ -2166,7 +2167,53 @@
       queryLogs.push({ role: 'ai', text: 'Error executing query. Verify Gemini API key.' });
       renderChatLog();
     }
+  }
+
+  chatForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const q = chatInput.value.strip();
+    chatInput.value = '';
+    await submitQuery(q);
   });
+
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (SpeechRecognition && micBtn) {
+    const recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.lang = 'en-US';
+
+    recognition.onstart = () => {
+      micBtn.style.color = 'var(--accent-red)';
+      chatInput.placeholder = "Listening...";
+    };
+
+    recognition.onresult = (event) => {
+      const transcript = event.results[0][0].transcript;
+      chatInput.value = transcript;
+      chatForm.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+    };
+
+    recognition.onerror = (event) => {
+      console.error("Speech recognition error:", event.error);
+      micBtn.style.color = 'var(--text-muted)';
+      chatInput.placeholder = "Ask anything about your data...";
+    };
+
+    recognition.onend = () => {
+      micBtn.style.color = 'var(--text-muted)';
+      chatInput.placeholder = "Ask anything about your data...";
+    };
+
+    micBtn.addEventListener('click', () => {
+      if (!selectedDataset) return;
+      try {
+        recognition.start();
+      } catch (err) {}
+    });
+  } else if (micBtn) {
+    micBtn.style.display = 'none';
+  }
 
   function renderQueryPanel() {
     queryLogs = [];
