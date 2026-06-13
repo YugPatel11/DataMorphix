@@ -1590,17 +1590,21 @@
         <div id="panel-relationships" class="tab-panel hidden">
           <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
             <div class="card glow-hover">
-              <div class="card-header">
+              <div class="card-header" style="display:flex; justify-content:space-between; align-items:center;">
                 <div class="card-title">
                   <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
                   Cross-Dataset Relations
+                </div>
+                <div>
+                  <input type="file" id="compare-file-input" accept=".csv,.xlsx,.xlsm,.xls,.json" style="display:none;" />
+                  <button id="compare-upload-btn" style="font-size:0.7rem; padding:6px 12px; border-radius:6px; background:var(--accent); border:none; color:white; cursor:pointer; font-weight:600; transition:var(--transition-fast);">Upload Dataset to Compare</button>
                 </div>
               </div>
               <div class="overflow-x-auto">
                 <table id="relations-cross-table">
                   <thead><tr><th>Source</th><th>Target</th><th style="text-align:center;">Match</th></tr></thead>
                   <tbody id="relations-cross-body">
-                    <tr><td colspan="3" style="text-align:center; padding:28px; color:var(--text-muted); font-style:italic;">No cross-dataset relations detected.</td></tr>
+                    <tr><td colspan="3" style="text-align:center; padding:28px; color:var(--text-muted); font-style:italic;">Upload a dataset to compare relationships.</td></tr>
                   </tbody>
                 </table>
               </div>
@@ -2185,19 +2189,27 @@
 
     recognition.onstart = () => {
       micBtn.style.color = 'var(--accent-red)';
-      chatInput.placeholder = "Listening...";
+      chatInput.placeholder = "Listening... Speak now.";
     };
 
     recognition.onresult = (event) => {
-      const transcript = event.results[0][0].transcript;
-      chatInput.value = transcript;
-      chatForm.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+      if (event.results.length > 0) {
+        const transcript = event.results[0][0].transcript;
+        chatInput.value = transcript;
+        chatForm.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+      }
     };
 
     recognition.onerror = (event) => {
       console.error("Speech recognition error:", event.error);
       micBtn.style.color = 'var(--text-muted)';
       chatInput.placeholder = "Ask anything about your data...";
+      
+      if (event.error === 'not-allowed') {
+        alert("Microphone access denied. Please allow microphone permissions in your browser.");
+      } else if (event.error !== 'no-speech') {
+        alert("Speech recognition error: " + event.error);
+      }
     };
 
     recognition.onend = () => {
@@ -2209,7 +2221,9 @@
       if (!selectedDataset) return;
       try {
         recognition.start();
-      } catch (err) {}
+      } catch (err) {
+        console.error("Recognition start error:", err);
+      }
     });
   } else if (micBtn) {
     micBtn.style.display = 'none';
@@ -2416,20 +2430,7 @@
   // ── 5. Relations ──
   async function renderRelations() {
     const crossBody = document.getElementById('relations-cross-body');
-    crossBody.innerHTML = '';
-    if (!selectedDataset?.outgoing_relations?.length) {
-      crossBody.innerHTML = `<tr><td colspan="3" style="text-align:center; padding:28px; color:var(--text-muted); font-style:italic;">No cross-dataset relations detected.</td></tr>`;
-    } else {
-      selectedDataset.outgoing_relations.forEach(r => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-          <td style="font-weight:700; color:var(--text-primary);">${r.source_dataset_name}.<span style="font-family:var(--font-mono); color:#a5b4fc;">${r.source_column}</span></td>
-          <td style="font-weight:700; color:var(--text-primary);">${r.target_dataset_name}.<span style="font-family:var(--font-mono); color:var(--accent-green);">${r.target_column}</span></td>
-          <td style="text-align:center;"><span class="badge badge-green">${(r.confidence_score * 100).toFixed(0)}% Match</span></td>
-        `;
-        crossBody.appendChild(tr);
-      });
-    }
+    crossBody.innerHTML = `<tr><td colspan="3" style="text-align:center; padding:28px; color:var(--text-muted); font-style:italic;">Upload a dataset to compare relationships.</td></tr>`;
 
     const internalBody = document.getElementById('relations-internal-body');
     internalBody.innerHTML = `<tr><td colspan="3" style="text-align:center; padding:20px; color:var(--text-muted);"><span class="spinner" style="margin-right:6px;"></span> Loading correlations...</td></tr>`;
@@ -2456,6 +2457,63 @@
     } catch (err) {
       internalBody.innerHTML = `<tr><td colspan="3" style="text-align:center; padding:28px; color:var(--accent-red); font-style:italic;">Failed to load internal relations.</td></tr>`;
     }
+  }
+
+  // ── Compare Upload ──
+  const compareBtn = document.getElementById('compare-upload-btn');
+  const compareInput = document.getElementById('compare-file-input');
+  
+  if (compareBtn && compareInput) {
+    compareBtn.addEventListener('click', () => {
+      if (!selectedDataset) return alert('Select a base dataset first.');
+      compareInput.click();
+    });
+
+    compareInput.addEventListener('change', async () => {
+      if (!compareInput.files.length) return;
+      if (!selectedDataset) return;
+      
+      const file = compareInput.files[0];
+      const crossBody = document.getElementById('relations-cross-body');
+      
+      compareBtn.innerHTML = '<span class="spinner" style="margin-right:6px;"></span> Comparing...';
+      compareBtn.disabled = true;
+      crossBody.innerHTML = `<tr><td colspan="3" style="text-align:center; padding:28px; color:var(--text-muted);"><span class="spinner" style="margin-right:6px;"></span> Comparing datasets...</td></tr>`;
+      
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      try {
+        const res = await fetch(`${API_BASE}/datasets/${selectedDataset.id}/compare-upload/`, {
+          method: 'POST',
+          body: formData
+        });
+        if (!res.ok) throw new Error('Comparison failed');
+        const list = await res.json();
+        
+        crossBody.innerHTML = '';
+        if (list.length === 0) {
+          crossBody.innerHTML = `<tr><td colspan="3" style="text-align:center; padding:28px; color:var(--text-muted); font-style:italic;">No matching columns found.</td></tr>`;
+        } else {
+          list.forEach(r => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+              <td style="font-weight:700; color:var(--text-primary);">${r.source_dataset_name}.<span style="font-family:var(--font-mono); color:#a5b4fc;">${r.source_column}</span></td>
+              <td style="font-weight:700; color:var(--text-primary);">${r.target_dataset_name}.<span style="font-family:var(--font-mono); color:var(--accent-green);">${r.target_column}</span></td>
+              <td style="text-align:center;"><span class="badge badge-green">${(r.confidence_score * 100).toFixed(0)}% Match</span></td>
+            `;
+            crossBody.appendChild(tr);
+          });
+        }
+      } catch (err) {
+        alert(err.message);
+        crossBody.innerHTML = `<tr><td colspan="3" style="text-align:center; padding:28px; color:var(--text-muted); font-style:italic;">Upload a dataset to compare relationships.</td></tr>`;
+      } finally {
+        compareBtn.innerText = 'Upload Dataset to Compare';
+        compareBtn.disabled = false;
+        compareInput.value = '';
+      }
+    });
   }
 
   // ── 6. Governance ──

@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 import json
 import csv
 import math
@@ -102,11 +103,12 @@ class DatasetViewSet(viewsets.ModelViewSet):
         # Compute Chi-Square statistic and Cramer's V
         total = table.values.sum()
         expected = table.sum(axis=1).to_numpy()[:, None] * table.sum(axis=0).to_numpy()[None, :] / total
+        expected = np.maximum(expected, 1e-9)
         chi_square = (((table.to_numpy() - expected) ** 2) / expected).sum()
         denominator = min(table.shape[0] - 1, table.shape[1] - 1)
-        score = math.sqrt((chi_square / total) / denominator) if denominator > 0 else 0
+        score = math.sqrt(max(0, (chi_square / total) / denominator)) if denominator > 0 else 0
 
-        if score < 0.35:
+        if math.isnan(score) or score < 0.35:
             return None
 
         return {
@@ -140,9 +142,9 @@ class DatasetViewSet(viewsets.ModelViewSet):
         grouped = pair.groupby(pair['category'].astype(str))['value']
         between_group_variance = sum(len(values) * ((values.mean() - overall_mean) ** 2) for _, values in grouped)
         total_variance = ((pair['value'] - overall_mean) ** 2).sum()
-        score = math.sqrt(between_group_variance / total_variance) if total_variance > 0 else 0
+        score = math.sqrt(max(0, between_group_variance / total_variance)) if total_variance > 0 else 0
 
-        if score < 0.35:
+        if math.isnan(score) or score < 0.35:
             return None
 
         return {
@@ -315,19 +317,10 @@ class DatasetViewSet(viewsets.ModelViewSet):
         )
 
         # ── Step 7: Cross-dataset relationship detection ──
+        # Removed as per redesign: cross-dataset relations are now calculated on-demand
+        # via the compare_upload endpoint instead of auto-calculating against all datasets.
+        
         existing_datasets = Dataset.objects.exclude(id=dataset.id)
-        for other_ds in existing_datasets:
-            for other_col in other_ds.columns.all():
-                for col_info in cols_info:
-                    if (other_col.name.lower() == col_info['name'].lower()
-                            and other_col.data_type == col_info['type']):
-                        DatasetRelationship.objects.create(
-                            source_dataset=dataset,
-                            target_dataset=other_ds,
-                            source_column=col_info['name'],
-                            target_column=other_col.name,
-                            confidence_score=0.9
-                        )
 
         # ── Step 8: Governance checks ──
         all_ds_cols = {}
@@ -346,6 +339,9 @@ class DatasetViewSet(viewsets.ModelViewSet):
                 column_name=issue['column'],
                 message=issue['message']
             )
+
+        # ── Step 9: Pre-Generate Analytics ──
+        self._generate_analytics_for_dataset(dataset, df)
 
     def create(self, request, *args, **kwargs):
         file_obj = request.data.get('file')
@@ -570,26 +566,55 @@ class DatasetViewSet(viewsets.ModelViewSet):
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-    # ── Adaptive Analytics ──
-    @action(detail=True, methods=['get'], url_path='analytics')
-    def analytics(self, request, pk=None):
-        """
-        Return AI-generated adaptive analytics plan with executed chart data.
-        Results are cached in the DB so the AI is called only ONCE per dataset version.
-        Pass ?refresh=1 to force regeneration (invalidates cache).
-        """
+    # ── Cross-Dataset Comparison (On-Demand) ──
+    @action(detail=True, methods=['post'], url_path='compare-upload')
+    def compare_upload(self, request, pk=None):
         dataset = self.get_object()
-        force_refresh = request.query_params.get('refresh', '0') == '1'
-
-        # Return cached result if available
-        if dataset.analytics_cache and not force_refresh:
-            return Response(dataset.analytics_cache)
+        file_obj = request.data.get('file')
+        if not file_obj:
+            return Response({'error': 'No file provided'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            df = self._read_dataframe(dataset.file.path, dataset.name)
-            if df is None:
-                return Response({'error': 'Cannot read dataset file'}, status=status.HTTP_400_BAD_REQUEST)
+            import tempfile
+            import os
+            
+            with tempfile.NamedTemporaryFile(delete=False, suffix=f"_{file_obj.name}") as tmp:
+                for chunk in file_obj.chunks():
+                    tmp.write(chunk)
+                tmp_path = tmp.name
 
+            df_new = self._read_dataframe(tmp_path, file_obj.name)
+            os.unlink(tmp_path)
+
+            if df_new is None:
+                return Response({'error': 'Unsupported file format'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            df_source = self._read_dataframe(dataset.file.path, dataset.name)
+            if df_source is None:
+                 return Response({'error': 'Cannot read original dataset file'}, status=status.HTTP_400_BAD_REQUEST)
+
+            source_cols = {col: str(df_source[col].dtype) for col in df_source.columns}
+            target_cols = {col: str(df_new[col].dtype) for col in df_new.columns}
+
+            matches = []
+            for t_col, t_type in target_cols.items():
+                for s_col, s_type in source_cols.items():
+                    if t_col.lower() == s_col.lower() and t_type == s_type:
+                        matches.append({
+                            'source_dataset_name': dataset.name,
+                            'target_dataset_name': file_obj.name,
+                            'source_column': s_col,
+                            'target_column': t_col,
+                            'confidence_score': 0.9
+                        })
+            
+            return Response(matches)
+
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def _generate_analytics_for_dataset(self, dataset, df):
+        try:
             # Build columns info with advanced stats for the AI planner
             cols_info = []
             for col in df.columns:
@@ -620,7 +645,7 @@ class DatasetViewSet(viewsets.ModelViewSet):
             plan = ai_engine.generate_adaptive_analytics_plan(dataset.name, cols_info)
 
             if not plan:
-                return Response({'error': 'AI could not generate analytics plan.'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+                return {'error': 'AI could not generate analytics plan.'}
 
             # Execute pandas code for each plan item
             results = []
@@ -683,7 +708,35 @@ class DatasetViewSet(viewsets.ModelViewSet):
             dataset.analytics_cache = response_data
             dataset.save(update_fields=['analytics_cache'])
 
-            return Response(response_data)
+            return response_data
+
+        except Exception as e:
+            return {'error': str(e)}
+
+    # ── Adaptive Analytics ──
+    @action(detail=True, methods=['get'], url_path='analytics')
+    def analytics(self, request, pk=None):
+        """
+        Return AI-generated adaptive analytics plan with executed chart data.
+        Results are cached in the DB so the AI is called only ONCE per dataset version.
+        Pass ?refresh=1 to force regeneration (invalidates cache).
+        """
+        dataset = self.get_object()
+        force_refresh = request.query_params.get('refresh', '0') == '1'
+
+        # Return cached result if available
+        if dataset.analytics_cache and not force_refresh:
+            return Response(dataset.analytics_cache)
+
+        try:
+            df = self._read_dataframe(dataset.file.path, dataset.name)
+            if df is None:
+                return Response({'error': 'Cannot read dataset file'}, status=status.HTTP_400_BAD_REQUEST)
+
+            result = self._generate_analytics_for_dataset(dataset, df)
+            if 'error' in result:
+                return Response(result, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response(result)
 
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
