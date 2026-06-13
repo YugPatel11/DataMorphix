@@ -11,6 +11,7 @@ class Dataset(models.Model):
     row_count = models.IntegerField(null=True, blank=True)
     current_version = models.IntegerField(default=0)
     max_version = models.IntegerField(default=0)
+    analytics_cache = models.JSONField(null=True, blank=True, default=None)
 
     def __str__(self):
         return self.name

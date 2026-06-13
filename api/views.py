@@ -570,6 +570,124 @@ class DatasetViewSet(viewsets.ModelViewSet):
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+    # ── Adaptive Analytics ──
+    @action(detail=True, methods=['get'], url_path='analytics')
+    def analytics(self, request, pk=None):
+        """
+        Return AI-generated adaptive analytics plan with executed chart data.
+        Results are cached in the DB so the AI is called only ONCE per dataset version.
+        Pass ?refresh=1 to force regeneration (invalidates cache).
+        """
+        dataset = self.get_object()
+        force_refresh = request.query_params.get('refresh', '0') == '1'
+
+        # Return cached result if available
+        if dataset.analytics_cache and not force_refresh:
+            return Response(dataset.analytics_cache)
+
+        try:
+            df = self._read_dataframe(dataset.file.path, dataset.name)
+            if df is None:
+                return Response({'error': 'Cannot read dataset file'}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Build columns info with advanced stats for the AI planner
+            cols_info = []
+            for col in df.columns:
+                null_count = int(df[col].isnull().sum())
+                unique_count = int(df[col].nunique())
+                advanced_stats = {}
+                if pd.api.types.is_numeric_dtype(df[col]):
+                    col_data = df[col].dropna()
+                    if len(col_data) > 0:
+                        advanced_stats = {
+                            'min': float(col_data.min()),
+                            'max': float(col_data.max()),
+                            'mean': float(col_data.mean()),
+                        }
+                else:
+                    top_values = df[col].value_counts().head(10).to_dict()
+                    advanced_stats = {'top_values': {str(k): int(v) for k, v in top_values.items()}}
+
+                cols_info.append({
+                    'name': col,
+                    'type': str(df[col].dtype),
+                    'nulls': null_count,
+                    'uniques': unique_count,
+                    'advanced_stats': advanced_stats,
+                })
+
+            # Single AI call -> get full analytics plan
+            plan = ai_engine.generate_adaptive_analytics_plan(dataset.name, cols_info)
+
+            if not plan:
+                return Response({'error': 'AI could not generate analytics plan.'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+            # Execute pandas code for each plan item
+            results = []
+            CHART_COLORS = [
+                '#6366f1', '#8b5cf6', '#38bdf8', '#10b981',
+                '#f59e0b', '#ef4444', '#ec4899', '#14b8a6',
+                '#f97316', '#a855f7', '#06b6d4', '#84cc16',
+            ]
+
+            for item in plan:
+                pandas_code = item.get('pandas_code')
+                chart_data = None
+
+                if pandas_code:
+                    try:
+                        allowed_globals = {'df': df, 'pd': pd}
+                        res = eval(pandas_code, allowed_globals)
+
+                        if hasattr(res, 'to_dict'):
+                            res_dict = res.to_dict()
+                        elif isinstance(res, dict):
+                            res_dict = res
+                        else:
+                            res_dict = {}
+
+                        if isinstance(res_dict, dict) and res_dict:
+                            chart_data = []
+                            for idx, (k, v) in enumerate(res_dict.items()):
+                                try:
+                                    val = float(v)
+                                except (ValueError, TypeError):
+                                    val = 0.0
+                                chart_data.append({
+                                    'name': str(k)[:30],
+                                    'value': val,
+                                    'color': CHART_COLORS[idx % len(CHART_COLORS)],
+                                })
+                    except Exception as e:
+                        print(f"[Analytics] pandas exec error for '{item.get('title')}': {e}")
+
+                if chart_data:
+                    results.append({
+                        'title': item.get('title', 'Analysis'),
+                        'analysis_type': item.get('analysis_type', 'general'),
+                        'chart_type': item.get('chart_type', 'bar'),
+                        'x_label': item.get('x_label', 'Category'),
+                        'y_label': item.get('y_label', 'Value'),
+                        'insight': item.get('insight', ''),
+                        'chart_data': chart_data,
+                    })
+
+            response_data = {
+                'dataset_id': dataset.id,
+                'dataset_name': dataset.name,
+                'total_analyses': len(results),
+                'analyses': results,
+            }
+
+            # Cache to DB to avoid recomputing on every load
+            dataset.analytics_cache = response_data
+            dataset.save(update_fields=['analytics_cache'])
+
+            return Response(response_data)
+
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
     # Rename Suggestions
     @action(detail=True, methods=['get'], url_path='rename-suggestions')
     def rename_suggestions(self, request, pk=None):
@@ -593,11 +711,12 @@ class DatasetViewSet(viewsets.ModelViewSet):
             if df is None:
                 return Response({'error': 'Cannot read dataset file'}, status=status.HTTP_400_BAD_REQUEST)
 
-            # Clear old data
+            # Clear old data + analytics cache
             dataset.columns.all().delete()
             dataset.lineage.all().delete()
             dataset.outgoing_relations.all().delete()
             dataset.governance_issues.all().delete()
+            dataset.analytics_cache = None
             dataset.status = 'processing'
             dataset.save()
 
@@ -670,6 +789,7 @@ class DatasetViewSet(viewsets.ModelViewSet):
             dataset.current_version = new_version
             dataset.max_version = new_version
             dataset.file = f"datasets/{new_filename}"
+            dataset.analytics_cache = None
             dataset.save()
 
             dataset.columns.all().delete()

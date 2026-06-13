@@ -1,15 +1,31 @@
+"""
+DataMorphix AI Engine
+=====================
+Multi-model, multi-key Gemini integration with automatic key rotation.
+
+Credit-efficiency model assignment:
+  MODEL_NANO  = gemini-2.0-flash-lite   → Bulk simple tasks (descriptions, renames)
+  MODEL_FLASH = gemini-2.5-flash        → Analytics planning, query analysis, summaries
+  MODEL_SMART = gemini-2.5-flash        → Complex reasoning (modification code)
+
+Key rotation: on ResourceExhausted / 429, advance atomically to next key.
+All analytics results are returned in a single batched AI call (no per-item calls).
+"""
+
 import os
-from google import genai
 import json
+import threading
 from pathlib import Path
 
 
-def load_local_env():
-    """Load simple KEY=VALUE pairs from backend/.env without extra dependencies."""
-    env_path = Path(__file__).resolve().parents[1] / '.env'
-    if not env_path.exists():
-        return
+# ── Load .env ────────────────────────────────────────────────────────────────
 
+def _load_local_env():
+    env_path = Path(__file__).resolve().parents[1] / 'backend' / '.env'
+    if not env_path.exists():
+        env_path = Path(__file__).resolve().parents[1] / '.env'
+        if not env_path.exists():
+            return
     for line in env_path.read_text(encoding='utf-8').splitlines():
         line = line.strip()
         if not line or line.startswith('#') or '=' not in line:
@@ -18,177 +34,336 @@ def load_local_env():
         os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
 
 
-load_local_env()
-
-# Initialize Gemini API. The API key should be in environment variables.
-api_key = os.getenv('GEMINI_API_KEY') or os.getenv('GOOGLE_API_KEY')
-if api_key and api_key != 'MOCK_KEY_FOR_LOCAL_DEV':
-    client = genai.Client(api_key=api_key)
-    model_name = 'gemini-2.5-flash'
-else:
-    client = None
-    model_name = None
+_load_local_env()
 
 
-def get_all_columns_metadata(dataset_name, columns_summary):
-    """Uses LLM to generate metadata for all columns in one API call to save tokens and time."""
-    if not client:
-        return {col['name']: f"Real AI desc for {col['name']} (Requires API key)" for col in columns_summary}
+# ── Import Gemini SDK ─────────────────────────────────────────────────────────
 
-    prompt = f"""
-    Analyze the following columns from dataset '{dataset_name}'.
-    Columns data: {json.dumps(columns_summary)}
-    Provide a concise, professional business description for each column (1 sentence max).
-    Return ONLY a valid JSON object mapping column names to their descriptions. No markdown, no other text.
-    Example format: {{"col_name": "description", "col2": "description"}}
+try:
+    from google import genai
+    _GENAI_AVAILABLE = True
+except ImportError:
+    _GENAI_AVAILABLE = False
+
+
+# ── Model Names ───────────────────────────────────────────────────────────────
+# Credit tiers:
+#   NANO  → cheapest, used for bulk simple tasks (column descriptions, renames)
+#   FLASH → balanced quality/cost, used for summaries, analytics plans, queries
+#   SMART → same model but reserved name slot for future pro upgrade if needed
+
+MODEL_NANO  = 'gemini-2.0-flash-lite'   # Bulk descriptions & rename (cheapest)
+MODEL_FLASH = 'gemini-2.5-flash'         # Analytics, query, summary (balanced)
+MODEL_SMART = 'gemini-2.5-flash'         # Code generation & complex reasoning
+
+
+# ── API Key Pool ──────────────────────────────────────────────────────────────
+
+def _collect_api_keys():
+    """Collect all non-empty API keys from env (KEY_1..KEY_5 + legacy)."""
+    raw = []
+    for i in range(1, 6):
+        k = os.getenv(f'GEMINI_API_KEY_{i}', '').strip()
+        if k and k not in ('MOCK_KEY_FOR_LOCAL_DEV', ''):
+            raw.append(k)
+    # Legacy single key fallback
+    legacy = os.getenv('GEMINI_API_KEY', '').strip()
+    if legacy and legacy not in ('MOCK_KEY_FOR_LOCAL_DEV', '') and legacy not in raw:
+        raw.insert(0, legacy)
+    return raw
+
+
+_API_KEYS = _collect_api_keys()
+_key_index = 0
+_key_lock  = threading.Lock()
+
+
+def _get_client():
+    """Return a Gemini Client for the currently active API key."""
+    if not _GENAI_AVAILABLE or not _API_KEYS:
+        return None
+    return genai.Client(api_key=_API_KEYS[_key_index])
+
+
+def _rotate_key():
+    """Advance to the next API key (thread-safe). Returns True if rotated."""
+    global _key_index
+    with _key_lock:
+        if len(_API_KEYS) <= 1:
+            return False
+        next_idx = (_key_index + 1) % len(_API_KEYS)
+        if next_idx == _key_index:
+            return False
+        _key_index = next_idx
+        print(f"[AI Engine] Rotated to API key index {_key_index}")
+        return True
+
+
+def _call_with_rotation(model: str, prompt: str, max_attempts: int = None) -> str | None:
     """
+    Call Gemini with automatic key rotation on quota/rate-limit errors.
+    Returns the response text or None on total failure.
+    """
+    if not _GENAI_AVAILABLE or not _API_KEYS:
+        return None
+
+    attempts = max_attempts or len(_API_KEYS)
+    tried = set()
+
+    for _ in range(attempts):
+        with _key_lock:
+            current = _key_index
+
+        if current in tried:
+            break
+        tried.add(current)
+
+        try:
+            client = _get_client()
+            response = client.models.generate_content(model=model, contents=prompt)
+            return response.text
+        except Exception as e:
+            err_str = str(e).lower()
+            # Quota / rate limit / auth errors → rotate key
+            if any(x in err_str for x in ('quota', '429', 'resource_exhausted',
+                                            'rate', 'limit', 'exhausted')):
+                print(f"[AI Engine] Key {current} quota hit: {e}")
+                rotated = _rotate_key()
+                if not rotated:
+                    print("[AI Engine] No more keys to rotate to.")
+                    return None
+            else:
+                # Non-quota error (bad prompt, network, etc.) — don't rotate
+                print(f"[AI Engine] Non-quota error: {e}")
+                return None
+
+    print("[AI Engine] All keys exhausted.")
+    return None
+
+
+def _parse_json_response(text: str) -> dict | list | None:
+    """Strip markdown fences and parse JSON from model response."""
+    if not text:
+        return None
+    cleaned = text.replace('```json', '').replace('```', '').strip()
     try:
-        response = client.models.generate_content(model=model_name, contents=prompt)
-        text = response.text.replace('```json', '').replace('```', '').strip()
-        return json.loads(text)
-    except Exception as e:
-        print(f"AI Error: {e}")
-        return {col['name']: "AI description failed." for col in columns_summary}
+        return json.loads(cleaned)
+    except json.JSONDecodeError:
+        # Try to extract first JSON block
+        import re
+        match = re.search(r'(\{[\s\S]*\}|\[[\s\S]*\])', cleaned)
+        if match:
+            try:
+                return json.loads(match.group(1))
+            except Exception:
+                pass
+    return None
 
 
-def generate_dataset_summary(dataset_name, columns_info):
-    """Uses LLM to generate a summary for the entire dataset."""
-    if not client:
-        return f"Real AI summary for {dataset_name} (Requires GEMINI_API_KEY)"
+# ── Public AI Functions ───────────────────────────────────────────────────────
 
-    prompt = f"""
-    Summarize the dataset '{dataset_name}'.
-    Columns: {json.dumps(columns_info)}
-    Provide a concise paragraph explaining the likely purpose of this dataset.
+def get_all_columns_metadata(dataset_name: str, columns_summary: list) -> dict:
     """
-    try:
-        response = client.models.generate_content(model=model_name, contents=prompt)
-        return response.text.strip()
-    except Exception as e:
-        return f"AI Error: {str(e)}"
-
-
-def analyze_query(dataset_name, columns_info, user_query):
-    """Uses LLM to analyze query and produce answer with optional chart planning."""
-    if not client:
-        return {
-            "answer": f"Mock AI answer for '{user_query}'",
-            "pandas_code": None,
-            "chart_type": None
-        }
-
-    prompt = f"""
-    You are an advanced AI Data Analyst for DataMorphix.
-    Analyze the user's query against the dataset '{dataset_name}'.
-    
-    COLUMNS SCHEMA:
-    {json.dumps(columns_info, indent=2)}
-
-    USER QUERY:
-    "{user_query}"
-
-    Your task is to:
-    1. Formulate a direct business answer to the user's question.
-    2. If the user is asking for a trend, comparison, breakdown, distribution, or specifically requests a graph/chart, write a single Python pandas expression that extracts the relevant data from a pandas DataFrame named 'df'.
-       - The pandas expression MUST evaluate to a Pandas Series, DataFrame, or dictionary containing label-value pairs.
-       - Example for "sales by city": df.groupby('City')['Sales'].sum().head(10).to_dict()
-       - Example for "distribution of categories": df['Category'].value_counts().head(10).to_dict()
-       - Example for "Null counts in columns": df.isnull().sum().to_dict()
-       - Make sure you use the exact column names from the columns schema above. Case sensitivity matters!
-       - The expression must NOT modify the dataframe (no in-place edits).
-    
-    Return ONLY a valid JSON object with the following keys. No markdown, no triple backticks, no other text.
-    {{
-      "answer": "A clear, professional, direct explanation of the insight.",
-      "pandas_code": "The pandas python expression as a string (or null if no data extraction is needed)",
-      "chart_type": "bar" | "line" | "pie" | "area" | null,
-      "x_label": "Label for the independent variable / category axis (string or null)",
-      "y_label": "Label for the dependent variable / value axis (string or null)"
-    }}
+    Batch describe all columns in ONE call using the cheapest (NANO) model.
+    Returns dict: {col_name: description}
     """
-    try:
-        response = client.models.generate_content(model=model_name, contents=prompt)
-        text = response.text.replace('```json', '').replace('```', '').strip()
-        return json.loads(text)
-    except Exception as e:
-        print(f"Query AI Error: {e}")
-        return {
-            "answer": f"Sorry, I encountered an issue analyzing your query. Error: {str(e)}",
-            "pandas_code": None,
-            "chart_type": None
-        }
+    if not _API_KEYS:
+        return {col['name']: f"Description unavailable (no API key)" for col in columns_summary}
+
+    # Compact prompt — fewer tokens = cheaper
+    compact_cols = [{'n': c['name'], 't': c['type'],
+                     's': c.get('samples', [])[:2]} for c in columns_summary]
+
+    prompt = (
+        f"Dataset: '{dataset_name}'. Describe each column concisely (max 12 words each).\n"
+        f"Columns: {json.dumps(compact_cols)}\n"
+        "Return ONLY valid JSON: {\"col_name\": \"description\"}. No markdown."
+    )
+
+    text = _call_with_rotation(MODEL_NANO, prompt)
+    result = _parse_json_response(text)
+    if isinstance(result, dict):
+        return result
+    return {col['name']: "Description unavailable." for col in columns_summary}
 
 
-def suggest_rename(column_name):
-    """Suggest a clean, standard name for a single column."""
-    if not client:
-        return column_name
-    prompt = f"Suggest a clean, standard snake_case name for the column: '{column_name}'. Reply with ONLY the name."
-    try:
-        response = client.models.generate_content(model=model_name, contents=prompt)
-        return response.text.strip()
-    except Exception:
-        return column_name
+def generate_dataset_summary(dataset_name: str, columns_info: list) -> str:
+    """Generate a concise dataset summary using FLASH model."""
+    if not _API_KEYS:
+        return f"AI summary unavailable (no API key configured)."
+
+    # Send only column names and types to save tokens
+    schema = [{'name': c['name'], 'type': c['type']} for c in columns_info]
+    prompt = (
+        f"Summarize dataset '{dataset_name}' in 2-3 sentences for a business audience.\n"
+        f"Schema: {json.dumps(schema)}\n"
+        "Be specific and insightful. Plain text, no markdown."
+    )
+
+    text = _call_with_rotation(MODEL_FLASH, prompt)
+    return text.strip() if text else "AI summary could not be generated."
 
 
-def get_all_rename_suggestions(column_names):
+def analyze_query(dataset_name: str, columns_info: list, user_query: str) -> dict:
     """
-    Uses LLM to suggest better names for all columns in one batched API call.
-    Returns a dict mapping original_name -> suggested_name.
+    Analyze a natural language query using FLASH model.
+    Returns answer + optional pandas_code + chart_type.
     """
-    if not client:
+    if not _API_KEYS:
+        return {"answer": f"AI unavailable. No API key.", "pandas_code": None, "chart_type": None}
+
+    schema = [{'name': c['name'], 'type': c['type'],
+               'desc': (c.get('description') or '')[:60],
+               'sample': c.get('sample_values', [])[:2]} for c in columns_info]
+
+    prompt = f"""You are a senior data analyst for DataMorphix.
+Dataset: '{dataset_name}'
+Schema: {json.dumps(schema, indent=2)}
+User query: "{user_query}"
+
+Tasks:
+1. Give a direct business answer (2-4 sentences).
+2. If query needs data visualization, write a pandas expression on DataFrame 'df' that returns a dict.
+   Examples:
+   - Value counts: df['Col'].value_counts().head(10).to_dict()
+   - Group sum: df.groupby('Cat')['Num'].sum().head(10).to_dict()
+   - Nulls: df.isnull().sum().to_dict()
+   Use exact column names. Expression must NOT modify df.
+
+Return ONLY valid JSON (no markdown):
+{{"answer":"...","pandas_code":"expression or null","chart_type":"bar"|"line"|"pie"|"doughnut"|null,"x_label":"...","y_label":"..."}}"""
+
+    text = _call_with_rotation(MODEL_FLASH, prompt)
+    result = _parse_json_response(text)
+    if isinstance(result, dict):
+        return result
+    return {"answer": "Query analysis failed. Please try again.", "pandas_code": None, "chart_type": None}
+
+
+def get_all_rename_suggestions(column_names: list) -> dict:
+    """
+    Batch rename suggestions in ONE call using cheapest NANO model.
+    Returns dict: {original: suggested}
+    """
+    if not _API_KEYS:
         return {col: col for col in column_names}
 
-    prompt = f"""
-    Suggest clean, standardized snake_case column names for these columns: {json.dumps(column_names)}
-    If the name is already clean and standard, keep it as-is.
-    Return ONLY a valid JSON object mapping original names to suggested names. No markdown, no other text.
-    Example: {{"cust_nm": "customer_name", "email": "email"}}
-    """
-    try:
-        response = client.models.generate_content(model=model_name, contents=prompt)
-        text = response.text.replace('```json', '').replace('```', '').strip()
-        return json.loads(text)
-    except Exception as e:
-        print(f"AI Rename Error: {e}")
-        return {col: col for col in column_names}
+    prompt = (
+        f"Suggest clean snake_case names for these columns: {json.dumps(column_names)}\n"
+        "Keep already clean names as-is.\n"
+        "Return ONLY valid JSON: {\"original\": \"suggested\"}. No markdown."
+    )
+
+    text = _call_with_rotation(MODEL_NANO, prompt)
+    result = _parse_json_response(text)
+    if isinstance(result, dict):
+        return result
+    return {col: col for col in column_names}
 
 
-def generate_modification_code(dataset_name, columns_info, instruction):
+def generate_modification_code(dataset_name: str, columns_info: list, instruction: str) -> str:
     """
-    Uses Gemini to generate Python Pandas code that modifies a DataFrame named 'df' in-place.
+    Generate pandas modification code using SMART model (best reasoning).
+    Returns raw Python code string.
     """
-    if not client:
+    if not _API_KEYS:
         return ""
 
-    prompt = f"""
-    You are a data analysis assistant for DataMorphix.
-    You need to write Python code using pandas to modify a DataFrame named `df`.
-    
-    DATASET NAME: '{dataset_name}'
-    COLUMNS SCHEMA:
-    {json.dumps(columns_info, indent=2)}
-    
-    USER COMMAND:
-    "{instruction}"
-    
-    Rules:
-    1. Your output MUST contain ONLY valid Python code using pandas that acts on a DataFrame named `df`.
-    2. Modifying operations must be in-place (e.g. df['new_col'] = ..., df.drop(..., inplace=True), df.rename(..., inplace=True)).
-    3. Do NOT wrap the code in backticks or markdown code blocks (no ```python). Just return the raw code.
-    4. Do NOT recreate the DataFrame or import pandas. Assume `df` is already a loaded pandas DataFrame.
-    """
-    try:
-        response = client.models.generate_content(model=model_name, contents=prompt)
-        text = response.text
-        if "```" in text:
-            lines = text.splitlines()
-            cleaned = []
-            for line in lines:
-                if not line.strip().startswith("```"):
-                    cleaned.append(line)
-            text = "\n".join(cleaned)
-        return text.strip()
-    except Exception as e:
-        print(f"AI Modification Error: {e}")
+    schema = [{'name': c['name'], 'type': c['type']} for c in columns_info]
+    prompt = f"""Write Python pandas code to modify DataFrame 'df' for dataset '{dataset_name}'.
+Schema: {json.dumps(schema, indent=2)}
+Instruction: "{instruction}"
+
+Rules:
+- Only valid pandas code. No imports. Assume df is loaded.
+- Use in-place operations: df['col'] = ..., df.drop(..., inplace=True), etc.
+- Return raw code only. No markdown, no backticks, no explanations."""
+
+    text = _call_with_rotation(MODEL_SMART, prompt)
+    if not text:
         return ""
+    # Strip any accidental markdown fences
+    lines = [l for l in text.splitlines() if not l.strip().startswith('```')]
+    return '\n'.join(lines).strip()
+
+
+def generate_adaptive_analytics_plan(dataset_name: str, columns_info: list) -> list:
+    """
+    Generate an adaptive analytics plan using FLASH model.
+
+    Analyzes the dataset schema and returns 6-10 relevant analysis items,
+    each containing: title, analysis_type, pandas_code, chart_type, insight.
+
+    This is a SINGLE batched AI call — no per-chart follow-up calls.
+    Results are meant to be cached in the DB to avoid recomputation.
+    """
+    if not _API_KEYS:
+        return []
+
+    # Build a rich but compact schema for the AI
+    schema_compact = []
+    for c in columns_info:
+        entry = {'name': c['name'], 'type': c['type']}
+        stats = c.get('advanced_stats', {})
+        if stats:
+            if 'mean' in stats:
+                entry['stats'] = {
+                    'min': round(stats.get('min', 0), 2),
+                    'max': round(stats.get('max', 0), 2),
+                    'mean': round(stats.get('mean', 0), 2)
+                }
+            elif 'top_values' in stats:
+                top = stats['top_values']
+                entry['top_cats'] = list(top.keys())[:5]
+        entry['nulls'] = c.get('nulls', 0)
+        entry['uniques'] = c.get('uniques', 0)
+        schema_compact.append(entry)
+
+    prompt = f"""You are a senior data analyst. Analyze the schema of dataset '{dataset_name}' and design the most relevant analytical visualizations.
+
+SCHEMA:
+{json.dumps(schema_compact, indent=2)}
+
+TASK: Generate 6-8 unique, insightful analyses that are SPECIFICALLY tailored to this dataset.
+Choose analysis types based on what columns exist:
+- Numeric columns → distributions, outliers, correlations
+- Categorical columns → frequency, top-N breakdown
+- Date/time columns → trends over time
+- Boolean/flag columns → ratio charts
+- Mixed → category-vs-numeric comparisons
+
+For each analysis item:
+1. Write a pandas expression (on df) that returns a dict of {{label: value}} pairs.
+2. Pick the best chart type: "bar", "line", "pie", "doughnut", "area", "scatter", "horizontal_bar"
+3. Write a 1-sentence professional insight describing what this chart reveals.
+
+IMPORTANT:
+- Use EXACT column names from the schema above.
+- pandas_code must evaluate to a dict or call .to_dict().
+- Keep expressions concise. Use .head(15) for large cardinality.
+- Never use columns that don't exist in the schema.
+
+Return ONLY valid JSON array. No markdown. Example format:
+[
+  {{
+    "title": "Age Distribution",
+    "analysis_type": "distribution",
+    "pandas_code": "df['age'].value_counts().sort_index().head(20).to_dict()",
+    "chart_type": "bar",
+    "x_label": "Age",
+    "y_label": "Count",
+    "insight": "The age distribution shows a right skew with most users between 25-35."
+  }}
+]"""
+
+    text = _call_with_rotation(MODEL_FLASH, prompt)
+    result = _parse_json_response(text)
+    if isinstance(result, list):
+        # Validate each item has required fields
+        valid = []
+        required = {'title', 'pandas_code', 'chart_type', 'insight'}
+        for item in result:
+            if isinstance(item, dict) and required.issubset(item.keys()):
+                valid.append(item)
+        return valid
+    return []
